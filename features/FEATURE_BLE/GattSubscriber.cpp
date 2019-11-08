@@ -1,33 +1,35 @@
 /**
- * @file GattSubscriber.cpp
- * @brief Brief Description
+ * ep-oc-mcu
+ * Embedded Planet Open Core for Microcontrollers
  * 
- * Detailed Description
+ * Built with ARM Mbed-OS
  *
- * Link to [markdown like this](@ref PageTag)
- * Make sure you tag the markdown page like this:
- * # Page title {#PageTag}
+ * Copyright (c) 2019 Embedded Planet, Inc.
+ * SPDX-License-Identifier: Apache-2.0
  * 
- * <a href='MyPDF.pdf'> Link to PDF documents like this</a>
- * If you add document files, make sure to add them into a directory inside a "docs" folder
- * And then run hud-devices/tools/copy-dox-files.py 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * To use images, make sure they're in an "images" folder and follow the doxygen user manual to add images.
- * You must run copy-dox-files.py after adding images as well.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * @copyright Copyright &copy; 2018 Heads Up Display, Inc.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
- *  Created on: Jul 13, 2018
- *      Author: gdbeckstein
  */
 
 #include "GattSubscriber.h"
 
 #include "platform/mbed_debug.h"
 
+using namespace ep;
+
 GattSubscriber::GattSubscriber(events::EventQueue& queue) : _queue(queue),
 	_state(STATE_INITIALIZED), _spec(NULL), _connection_handle(NULL),
-	_max_retries(0), _retries_left(0), _timeout(),
+	_max_retries(0), _retries_left(0), _timeout_ms(5000), _retry_delay_ms(500),_timeout(),
 	_result(), _discovered_chars(NULL),
 	_ignore_termination_cb(false), _char_flags(NULL),
 	_idx_current_char(0)
@@ -35,10 +37,10 @@ GattSubscriber::GattSubscriber(events::EventQueue& queue) : _queue(queue),
 
 	BLE& ble = BLE::Instance();
 
-	// Reset the subscriber on disconnection
-	ble.gap().onDisconnection(
-			Gap::DisconnectionEventCallback_t(
-					this, &GattSubscriber::on_disconnect));
+	// Reset the subscriber on connection
+	ble.gap().onConnection(
+			Gap::ConnectionEventCallback_t(
+					this, &GattSubscriber::on_connect));
 
 	// Attach a service discovery terminated callback
 	ble.gattClient().onServiceDiscoveryTermination(
@@ -62,7 +64,8 @@ GattSubscriber::~GattSubscriber()
 
 void GattSubscriber::discover_and_subscribe(
 		mbed::Callback<void(result_t)> result_cb, subscription_spec_t* spec,
-		Gap::Handle_t* connection_handle, int max_retries)
+		Gap::Handle_t* connection_handle, unsigned int max_retries, unsigned int timeout_ms,
+		unsigned int retry_delay_ms)
 {
 
 	BLE& ble = BLE::Instance();
@@ -77,11 +80,11 @@ void GattSubscriber::discover_and_subscribe(
 			_spec = spec;
 			_connection_handle = connection_handle;
 			_max_retries = max_retries;
+			_timeout_ms = timeout_ms;
+			_retry_delay_ms = retry_delay_ms;
 
 			_result.service_uuid = _spec->service_uuid;
 			_result.num_chars = _spec->num_characteristics;
-
-			//reset_timeout();
 
 			// Start with discovering the service
 			debug("gatt subscriber: service discovery begin\n");
@@ -102,27 +105,20 @@ void GattSubscriber::discover_and_subscribe(
 
 void GattSubscriber::reset(void)
 {
-	if(_state == STATE_FAILED ||
-		_state == STATE_SHUTTING_DOWN ||
-		_state == STATE_SUBSCRIBED)
+	if(_discovered_chars)
 	{
-		if(_discovered_chars)
-		{
-			delete[] _discovered_chars;
-			_discovered_chars = 0;
-		}
-
-
-		if(_char_flags)
-		{
-			delete[] _char_flags;
-			_char_flags = 0;
-		}
-
-		_state = STATE_INITIALIZED;
+		delete[] _discovered_chars;
+		_discovered_chars = 0;
 	}
-	else
-		debug("gatt subscriber: cannot reset in current state!\n");
+
+
+	if(_char_flags)
+	{
+		delete[] _char_flags;
+		_char_flags = 0;
+	}
+
+	_state = STATE_INITIALIZED;
 }
 
 void GattSubscriber::update_state(bool success)
@@ -131,8 +127,8 @@ void GattSubscriber::update_state(bool success)
 	{
 		if(--_retries_left == 0)
 		{
-			_result.status = (result_status_t)(_state);
 			// We're out of retries, report failure
+			_result.status = (result_status_t)(_state);
 			_state = STATE_FAILED;
 		}
 	}
@@ -185,7 +181,7 @@ void GattSubscriber::update_state(bool success)
 		else
 		{
 			debug("gatt subscriber: service discovery failed, retrying...\n");
-			_queue.call_in(GATT_SUBSCRIBER_RETRY_MS,
+			_queue.call_in(_retry_delay_ms,
 					mbed::callback(this, &GattSubscriber::start_service_discovery));
 		}
 		break;
@@ -210,8 +206,7 @@ void GattSubscriber::update_state(bool success)
 		else
 		{
 			debug("gatt subscriber: characteristic discovery failed, retrying...\n");
-			_queue.call_in(GATT_SUBSCRIBER_RETRY_MS,
-					mbed::callback(this, &GattSubscriber::start_characteristic_discovery));
+			_queue.call_in(_retry_delay_ms, &GattSubscriber::start_characteristic_discovery));
 		}
 		break;
 
@@ -236,7 +231,7 @@ void GattSubscriber::update_state(bool success)
 		{
 			debug("gatt subscriber: descriptor discovery failed, retrying...\n");
 			// Retry
-			_queue.call_in(GATT_SUBSCRIBER_RETRY_MS,
+			_queue.call_in(_retry_delay_ms,
 					mbed::callback(this, &GattSubscriber::start_descriptor_discovery));
 		}
 		break;
@@ -411,8 +406,7 @@ void GattSubscriber::subscribe(void)
 
 		BLE& ble = BLE::Instance();
 
-		ble_error_t result = BLE_ERROR_NONE;
-		result = ble.gattClient().write(GattClient::GATT_OP_WRITE_REQ,
+		ble.gattClient().write(GattClient::GATT_OP_WRITE_REQ,
 				*_connection_handle, descriptor_handle,
 				sizeof(uint16_t),
 				reinterpret_cast<const uint8_t*>(
@@ -541,14 +535,23 @@ void GattSubscriber::on_written_cb(const GattWriteCallbackParams* params)
 			debug("gatt subscriber: descriptor %i - %s\n", _idx_current_char, (params->status? "FAILED" : "SUCCESS"));
 
 			// Flag it
-			_char_flags[_idx_current_char] = true;
-			_queue.call(mbed::callback(this, &GattSubscriber::subscribe));
+			if(params->status == BLE_ERROR_NONE) {
+				_char_flags[_idx_current_char] = true;
+				_queue.call(mbed::callback(this, &GattSubscriber::subscribe));
+			} else {
+				// Descriptor write request rejected -- the application may need to upgrade link security
+				// Report failure
+				_result.status = (result_status_t)(_state);
+				_state = STATE_FAILED;
+			}
+
+
 		}
 	}
 }
 
-void GattSubscriber::on_disconnect(
-		const Gap::DisconnectionCallbackParams_t* params)
+void GattSubscriber::on_connect(
+		const Gap::ConnectionCallbackParams_t* params)
 {
 	reset();
 }
