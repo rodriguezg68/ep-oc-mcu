@@ -25,6 +25,9 @@
 
 #include "platform/mbed_debug.h"
 
+// Surprisingly not part of Mbed's BLE headers
+#define CCCD_UUID UUID(0x2902)
+
 using namespace ep;
 
 GattSubscriber::GattSubscriber(events::EventQueue& queue) : _queue(queue),
@@ -68,38 +71,29 @@ void GattSubscriber::discover_and_subscribe(
 		unsigned int retry_delay_ms)
 {
 
-	BLE& ble = BLE::Instance();
-
-	// Make sure we're connected before attempting to start service discovery
-	if(ble.gap().getState().connected)
+	if(_state == STATE_INITIALIZED || _state == STATE_FAILED)
 	{
-		if(_state == STATE_INITIALIZED || _state == STATE_FAILED)
-		{
-			// Store settings
-			_result_cb = result_cb;
-			_spec = spec;
-			_connection_handle = connection_handle;
-			_max_retries = max_retries;
-			_timeout_ms = timeout_ms;
-			_retry_delay_ms = retry_delay_ms;
+		// Store settings
+		_result_cb = result_cb;
+		_spec = spec;
+		_connection_handle = connection_handle;
+		_max_retries = max_retries;
+		_timeout_ms = timeout_ms;
+		_retry_delay_ms = retry_delay_ms;
 
-			_result.service_uuid = _spec->service_uuid;
-			_result.num_chars = _spec->num_characteristics;
+		_result.subscriber = this;
+		_result.service_uuid = _spec->service_uuid;
+		_result.num_chars = _spec->num_characteristics;
 
-			// Start with discovering the service
-			debug("gatt subscriber: service discovery begin\n");
-			_state = STATE_DISCOVERING_SERVICE;
-			_retries_left = _max_retries;
-			start_service_discovery();
-		}
-		else
-		{
-			debug("gatt subscriber: cannot start discovery in current state!\n");
-		}
+		// Start with discovering the service
+		debug("gatt subscriber: service discovery begin\r\n");
+		_state = STATE_DISCOVERING_SERVICE;
+		_retries_left = _max_retries;
+		start_service_discovery();
 	}
 	else
 	{
-		debug("gatt subscriber: error, not connected to peer!\n");
+		debug("gatt subscriber: cannot start discovery in current state!");
 	}
 }
 
@@ -142,7 +136,7 @@ void GattSubscriber::update_state(bool success)
 	case STATE_DISCOVERING_SERVICE:
 		if(success)
 		{
-			debug("gatt subscriber: found service\n");
+			debug("gatt subscriber: found service\r\n");
 
 			// Terminate service discovery
 			_ignore_termination_cb = true;
@@ -180,7 +174,7 @@ void GattSubscriber::update_state(bool success)
 		}
 		else
 		{
-			debug("gatt subscriber: service discovery failed, retrying...\n");
+			debug("gatt subscriber: service discovery failed, retrying...\r\n");
 			_queue.call_in(_retry_delay_ms,
 					mbed::callback(this, &GattSubscriber::start_service_discovery));
 		}
@@ -189,7 +183,7 @@ void GattSubscriber::update_state(bool success)
 	case STATE_DISCOVERING_CHARACTERISTICS:
 		if(success)
 		{
-			debug("gatt subscriber: discovered all characteristics\n");
+			debug("gatt subscriber: discovered all characteristics\r\n");
 
 			// Start discovering descriptors
 			_state = STATE_DISCOVERING_DESCRIPTORS;
@@ -200,13 +194,15 @@ void GattSubscriber::update_state(bool success)
 
 			// Flags in this case will keep track of characteristics
 			// for which DescriptorDiscovery is done (either skipped or successful)
-			debug("gatt subscriber: discovering descriptors...\n");
-			_queue.call_in(300, mbed::callback(this, &GattSubscriber::start_descriptor_discovery));
+			debug("gatt subscriber: discovering descriptors...\r\n");
+			_queue.call_in(300,
+					mbed::callback(this, &GattSubscriber::start_descriptor_discovery));
 		}
 		else
 		{
-			debug("gatt subscriber: characteristic discovery failed, retrying...\n");
-			_queue.call_in(_retry_delay_ms, &GattSubscriber::start_characteristic_discovery));
+			debug("gatt subscriber: characteristic discovery failed, retrying...\r\n");
+			_queue.call_in(_retry_delay_ms,
+					mbed::callback(this, &GattSubscriber::start_characteristic_discovery));
 		}
 		break;
 
@@ -214,7 +210,7 @@ void GattSubscriber::update_state(bool success)
 		if(success)
 		{
 			// Initiate subscribing
-			debug("gatt subscriber: all descriptors found, subscribing...\n");
+			debug("gatt subscriber: all descriptors found, subscribing...\r\n");
 
 			_state = STATE_SUBSCRIBING;
 			_retries_left = _max_retries;
@@ -229,7 +225,7 @@ void GattSubscriber::update_state(bool success)
 		}
 		else
 		{
-			debug("gatt subscriber: descriptor discovery failed, retrying...\n");
+			debug("gatt subscriber: descriptor discovery failed, retrying...\r\n");
 			// Retry
 			_queue.call_in(_retry_delay_ms,
 					mbed::callback(this, &GattSubscriber::start_descriptor_discovery));
@@ -240,11 +236,16 @@ void GattSubscriber::update_state(bool success)
 		if(success)
 		{
 			// We're all done, tell the application everything succeeded
-			debug("gatt subscriber: done subscribing...\n");
+			debug("gatt subscriber: done subscribing...\r\n");
 
 			_state = STATE_SUBSCRIBED;
 			_result.status = SUBSCRIBE_SUCCESS;
 			_result_cb(_result);
+		} else {
+			// Retry subscribing
+			debug("gatt subscriber: subscribing failed, retrying...\r\n");
+			_queue.call_in(_retry_delay_ms,
+					mbed::callback(this, &GattSubscriber::subscribe));
 		}
 		break;
 
@@ -272,10 +273,15 @@ void GattSubscriber::start_service_discovery(void)
 	if(!ble.gattClient().isServiceDiscoveryActive())
 	{
 		// Attempt to discover the specified service
-		ble.gattClient().launchServiceDiscovery(*_connection_handle,
+		ble_error_t error = ble.gattClient().launchServiceDiscovery(
+				*_connection_handle,
 				ServiceDiscovery::ServiceCallback_t
 				(this, &GattSubscriber::service_discovered_cb),
 				NULL, _spec->service_uuid);
+
+		if(error) {
+			debug("gatt subscriber: failed to launch service discovery\r\n");
+		}
 
 		/*
 		 * From here, one of two things will happen:
@@ -296,7 +302,7 @@ void GattSubscriber::start_service_discovery(void)
 
 void GattSubscriber::start_characteristic_discovery(void)
 {
-	debug("gatt_subscriber: characteristic discovery begin\n");
+	debug("gatt_subscriber: characteristic discovery begin\r\n");
 
 	BLE& ble = BLE::Instance();
 
@@ -356,7 +362,7 @@ void GattSubscriber::start_descriptor_discovery(void)
 		DiscoveredCharacteristic characteristic =
 				_discovered_chars[_idx_current_char].characteristic;
 
-		debug("gatt subscriber: discovering descriptor for characteristic: 0x%04X\n",
+		debug("gatt subscriber: discovering descriptor for characteristic: 0x%04X\r\n",
 				characteristic.getUUID().getShortUUID());
 
 		BLE& ble = BLE::Instance();
@@ -424,11 +430,11 @@ void GattSubscriber::service_discovered_cb(const DiscoveredService* service)
 void GattSubscriber::characteristic_discovered_cb(
 			const DiscoveredCharacteristic* characteristic)
 {
-	debug("gatt subscriber: discovered characteristic\n");
-	debug("                 uuid: %04X\n",
+	debug("gatt subscriber: discovered characteristic\r\n");
+	debug("                 uuid: %04X\r\n",
 			characteristic->getUUID().getShortUUID());
-	debug("                 handle: %02X\n", characteristic->getValueHandle());
-	debug("                 properties: %02X\n",
+	debug("                 handle: %02X\r\n", characteristic->getValueHandle());
+	debug("                 properties: %02X\r\n",
 			*((uint8_t*)&(characteristic->getProperties())));
 
 	// Check discovered characteristic against those in spec
@@ -443,7 +449,7 @@ void GattSubscriber::characteristic_discovered_cb(
 
 			// Flag it
 			_char_flags[i] = true;
-			debug("gatt subscriber: characteristic %i flagged\n", i);
+			debug("gatt subscriber: characteristic %i flagged\r\n", i);
 			break;
 		}
 	}
@@ -474,7 +480,7 @@ void GattSubscriber::discovery_termination_cb(Gap::Handle_t handle)
 		// the discovery termination callback after a success
 		if(!_ignore_termination_cb)
 		{
-			debug("discovery_termination_cb\n");
+			debug("discovery_termination_cb\r\n");
 			// This is called when either service OR characteristic discovery is terminated
 			// Tell the state machine this step failed
 			_queue.call(mbed::callback(this, &GattSubscriber::update_state), false);
@@ -487,10 +493,16 @@ void GattSubscriber::discovery_termination_cb(Gap::Handle_t handle)
 void GattSubscriber::descriptor_discovery_cb(
 		const CharacteristicDescriptorDiscovery::DiscoveryCallbackParams_t* params)
 {
-	debug("gatt subscriber: discovered descriptor\n");
-	debug("                 uuid: %04X\n",
+	debug("gatt subscriber: discovered descriptor\r\n");
+	debug("                 uuid: %04X\r\n",
 			params->descriptor.getUUID().getShortUUID());
-	debug("                 handle: %02X\n", params->descriptor.getAttributeHandle());
+	debug("                 handle: %02X\r\n", params->descriptor.getAttributeHandle());
+
+
+	if(params->descriptor.getUUID() != CCCD_UUID) {
+		debug("gatt subscriber: not a CCCD, skipping\r\n");
+		return;
+	}
 
 	// Save a handle to it
 	_discovered_chars[_idx_current_char].descriptor = params->descriptor.getAttributeHandle();
@@ -514,7 +526,6 @@ void GattSubscriber::descriptor_discovery_termination_cb(
 {
 	if(!_ignore_termination_cb)
 	{
-		//debug("descriptor_disco_term_cb");
 		// This means descriptor discovery terminated without success... retry
 		_queue.call(mbed::callback(this, &GattSubscriber::update_state), false);
 
@@ -532,7 +543,7 @@ void GattSubscriber::on_written_cb(const GattWriteCallbackParams* params)
 		if(params->handle ==
 				_discovered_chars[_idx_current_char].descriptor)
 		{
-			debug("gatt subscriber: descriptor %i - %s\n", _idx_current_char, (params->status? "FAILED" : "SUCCESS"));
+			debug("gatt subscriber: descriptor %i - %s\r\n", _idx_current_char, (params->status? "FAILED" : "SUCCESS"));
 
 			// Flag it
 			if(params->status == BLE_ERROR_NONE) {
@@ -540,9 +551,8 @@ void GattSubscriber::on_written_cb(const GattWriteCallbackParams* params)
 				_queue.call(mbed::callback(this, &GattSubscriber::subscribe));
 			} else {
 				// Descriptor write request rejected -- the application may need to upgrade link security
-				// Report failure
-				_result.status = (result_status_t)(_state);
-				_state = STATE_FAILED;
+				// Retry
+				_queue.call(mbed::callback(this, &GattSubscriber::update_state), false);
 			}
 
 
@@ -558,7 +568,7 @@ void GattSubscriber::on_connect(
 
 void GattSubscriber::timeout_cb(void)
 {
-	debug("gatt subscriber:  timeout cb!\n");
+	debug("gatt subscriber:  timeout cb!\r\n");
 	// Timeout - report a failure
 	_queue.call(mbed::callback(this, &GattSubscriber::update_state), false);
 }
@@ -569,5 +579,5 @@ void GattSubscriber::reset_timeout(void)
 
 	// Start the local timeout
 	_timeout.attach_us(mbed::callback(this, &GattSubscriber::timeout_cb),
-			GATT_SUBSCRIBER_TIMEOUT_US);
+			_timeout_ms);
 }

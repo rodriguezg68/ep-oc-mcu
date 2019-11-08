@@ -93,6 +93,7 @@ namespace ep {
 
 			typedef struct result_t
 			{
+					GattSubscriber* subscriber; /*!< Related GattSubscriber instance */
 					result_status_t status; /*!< Status of the result */
 					UUID service_uuid;	/*!< UUID of the associated Gatt Service */
 					subscription_char_t* discovered_chars; /*!< Discovered characteristics and their descriptors */
@@ -159,6 +160,10 @@ namespace ep {
 
 			/** Resets the subscriber state machine to its initial state */
 			void reset(void);
+
+			Gap::Handle_t* get_connection_handle(void) {
+				return _connection_handle;
+			}
 
 
 		private:
