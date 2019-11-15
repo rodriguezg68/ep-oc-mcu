@@ -16,24 +16,28 @@
 
 #include "gtest/gtest.h"
 
+#include "platform/CallChain.h"
+
 /*
- * Purpose of this test is just to be empty baseline
- * that does nothing, but includes all source files
- * in the build.
- * Do not add any tests here
+ *
  */
 
-class EmptyBaseline : public testing::Test {
-    virtual void SetUp()
+class TestCallChain : public testing::Test {
+    
+	
+	virtual void SetUp()
     {
+    	
     }
 
     virtual void TearDown()
     {
     }
+
 };
 
-TEST_F(EmptyBaseline, constructor)
+TEST_F(TestCallChain, constructor)
 {
-    EXPECT_TRUE(true);
+
+
 }
