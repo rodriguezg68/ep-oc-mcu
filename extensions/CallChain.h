@@ -71,7 +71,7 @@ namespace ep {
 				return callback;
 			}
 
-			void operator()(ArgTs... args) const {
+			void operator()(ArgTs... args) {
 				callback(args...);
 			}
 
@@ -104,6 +104,7 @@ namespace ep {
 			/** Create the first element if it doesn't exist */
 			if(!element) {
 				element = new CallChainLink(callback);
+				head = element;
 				return;
 			}
 
@@ -193,7 +194,7 @@ namespace ep {
 			}
 
 			do {
-				*element(args...); // Call the callback with given args
+				(*element)(args...); // Call the callback with given args
 				element = element->next();
 			} while(element);
 		}
