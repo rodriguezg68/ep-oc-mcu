@@ -11,11 +11,12 @@ set(unittest-includes ${unittest-includes}
   ../platform/
 )
 
-#set(unittest-sources
-#)
+set(unittest-sources
+  ../../mbed-os/UNITTESTS/stubs/mbed_assert_stub.c
+)
 
 set(unittest-test-sources
-  platform/CallChain/test_CallChain.cpp
+  extensions/CallChain/test_CallChain.cpp
 )
 
 set(CONF_FLAGS "-DMBED_CONF_PLATFORM_CTHUNK_COUNT_MAX=10")
