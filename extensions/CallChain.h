@@ -11,10 +11,6 @@
 #include "platform/Callback.h"
 #include "platform/NonCopyable.h"
 
-//#include <type_traits>
-
-
-
 namespace ep {
 
 
@@ -127,7 +123,7 @@ namespace ep {
 		void detach(const LinkCallback& callback) {
 
 			/** Iterate to the element with the matching callback */
-			CallChainLink *prev_element, *curr_element = head;
+			CallChainLink *prev_element = NULL, *curr_element = head;
 
 			/** No elements to remove */
 			if(!curr_element) {
@@ -163,7 +159,7 @@ namespace ep {
 		void detach_all(void) {
 
 			/** Iterate through all elements and delete them */
-			CallChainLink *prev_element, *element = head;
+			CallChainLink *prev_element = NULL, *element = head;
 
 			/** No elements to remove */
 			if(!element) {
@@ -205,7 +201,7 @@ namespace ep {
 
 	private:
 
-		CallChainLink* head; /** First element in the callchain */
+		CallChainLink* head; /** First element in the CallChain */
 
 
 	};
