@@ -18,5 +18,21 @@ See the official Mbed-OS documentation for writing and running unit tests for mo
 Since many stub classes and dependencies exist in the Mbed-OS source repository, Mbed-OS is required to build the unit tests in this repository properly. The Mbed-OS repository should be clone **beside** this repository, __not__ inside of it. For example, your directory structure should look like this when building and running ep-oc-mcu unit tests:
 
 --> my-current-directory
+
 ----> ep-oc-mcu
+
 ----> mbed-os
+
+### Building and Testing
+
+You can build unit tests for ep-oc-mcu the same way you would build unit tests for mbed-os using cmake:
+
+
+>>>Build tests directly with CMake.
+
+>>>1.) Create a build directory mkdir UNITTESTS/build.
+>>>2.) Move to the build directory cd UNITTESTS/build.
+>>>3.) Run CMake using a relative path to UNITTESTS folder as the argument. So from UNITTESTS/build use cmake ..:
+>>>   a.) Add -DCMAKE_BUILD_TYPE=Debug for a debug build.
+>>>   b.) Add -DCOVERAGE=True to add coverage compiler flags.
+>>>4.) Run a Make program to build tests.
