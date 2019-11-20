@@ -23,14 +23,13 @@
 
 #include <string>
 
-/*
+
+/**
+ * Test for CallChain extension
  *
+ * A BitFlag class is used to test whether
+ * Callbacks are actually executed (or not)
  */
-
-#define MAX_NUM_BITFLAGS 32
-
-#define MIN(a, b) (((a) <= (b)) ? (a) : (b))
-
 class TestCallChain : public testing::Test {
     
 	virtual void SetUp()
@@ -71,8 +70,10 @@ public:
      * This function asserts failure if not.
      *
      * @param[in] bitstring C-style string of '1'/'0' characters representing
-     * @param[in]
      * the expected bit flags to be set by the callbacks in a test.
+     *
+     * @param[in] flags Span of flags to check bitstring against
+     *
      *
      * IE: callback_0 added, callback_1 added, callback 0 removed ->
      * expected test result is "10" (bit 1 set, bit 0 clear)
@@ -129,7 +130,6 @@ TEST_F(TestCallChain, multi_callback)
 }
 
 /** Tests to make sure callbacks are removed from the CallChain properly.
- * Includes tests for beginning and end removal cases
  */
 TEST_F(TestCallChain, detach_middle)
 {
@@ -148,7 +148,6 @@ TEST_F(TestCallChain, detach_middle)
 }
 
 /** Tests to make sure callbacks are removed from the CallChain properly.
- * Includes tests for beginning and end removal cases
  */
 TEST_F(TestCallChain, detach_end)
 {
@@ -159,7 +158,7 @@ TEST_F(TestCallChain, detach_end)
 	callchain.attach(mbed::callback(&flags[1], &BitFlag::set_bit));
 	callchain.attach(mbed::callback(&flags[2], &BitFlag::set_bit));
 
-	// Detach middle one
+	// Detach end one
 	callchain.detach(mbed::callback(&flags[2], &BitFlag::set_bit));
 	callchain.call();
 
@@ -167,7 +166,6 @@ TEST_F(TestCallChain, detach_end)
 }
 
 /** Tests to make sure callbacks are removed from the CallChain properly.
- * Includes tests for beginning and end removal cases
  */
 TEST_F(TestCallChain, detach_beginning)
 {
@@ -178,7 +176,7 @@ TEST_F(TestCallChain, detach_beginning)
 	callchain.attach(mbed::callback(&flags[1], &BitFlag::set_bit));
 	callchain.attach(mbed::callback(&flags[2], &BitFlag::set_bit));
 
-	// Detach middle one
+	// Detach beginning one
 	callchain.detach(mbed::callback(&flags[0], &BitFlag::set_bit));
 	callchain.call();
 
@@ -186,7 +184,6 @@ TEST_F(TestCallChain, detach_beginning)
 }
 
 /** Tests to make sure callbacks are removed from the CallChain properly.
- * Includes tests for beginning and end removal cases
  */
 TEST_F(TestCallChain, detach_all)
 {
@@ -197,10 +194,71 @@ TEST_F(TestCallChain, detach_all)
 	callchain.attach(mbed::callback(&flags[1], &BitFlag::set_bit));
 	callchain.attach(mbed::callback(&flags[2], &BitFlag::set_bit));
 
-	// Detach middle one
+	// Detach all
 	callchain.detach_all();
 	callchain.call();
 
 	assert_matching_flags("000", flag_list);
+}
+
+/**
+ * Test to ensure duplicate callbacks cannot be added to the CallChain
+ */
+TEST_F(TestCallChain, disallow_duplicates_test)
+{
+	BitFlag flags[3];
+	mbed::Span<BitFlag, 3> flag_list(flags);
+	ep::CallChain<> callchain;
+	callchain.attach(mbed::callback(&flags[0], &BitFlag::set_bit));
+	callchain.attach(mbed::callback(&flags[1], &BitFlag::set_bit));
+	// Add a duplicate
+	callchain.attach(mbed::callback(&flags[1], &BitFlag::set_bit));
+	callchain.attach(mbed::callback(&flags[2], &BitFlag::set_bit));
+
+	/*
+	 * Detach the one we tried to duplicate --
+	 * should only need to detach one to prevent the bit
+	 * flag from being set
+	 */
+	callchain.detach(mbed::callback(&flags[1], &BitFlag::set_bit));
+
+	callchain.call();
+
+	assert_matching_flags("101", flag_list);
+}
+
+/** General purpose use case test
+ */
+TEST_F(TestCallChain, general_test)
+{
+	BitFlag flags[5];
+	mbed::Span<BitFlag, 5> flag_list(flags);
+	ep::CallChain<> callchain;
+	callchain.attach(mbed::callback(&flags[0], &BitFlag::set_bit));
+	callchain.attach(mbed::callback(&flags[1], &BitFlag::set_bit));
+	callchain.attach(mbed::callback(&flags[2], &BitFlag::set_bit));
+	callchain.call();
+	assert_matching_flags("00111", flag_list);
+	callchain.attach(mbed::callback(&flags[3], &BitFlag::set_bit));
+	callchain.attach(mbed::callback(&flags[4], &BitFlag::set_bit));
+	reset_flags(flags);
+	callchain.call();
+	assert_matching_flags("11111", flag_list);
+	reset_flags(flags);
+	callchain.detach(mbed::callback(&flags[2], &BitFlag::set_bit));
+	callchain.call();
+	assert_matching_flags("11011", flag_list);
+	reset_flags(flags);
+	callchain.detach(mbed::callback(&flags[3], &BitFlag::set_bit));
+	callchain.call();
+	assert_matching_flags("10011", flag_list);
+	reset_flags(flags);
+	callchain.detach(mbed::callback(&flags[0], &BitFlag::set_bit));
+	callchain.call();
+	assert_matching_flags("10010", flag_list);
+
+
+
+
 }
 
