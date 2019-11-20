@@ -150,6 +150,13 @@ namespace ep {
 				return;
 			}
 
+			// Handle the case where the element being removed is the head of the chain
+			if(curr_element == head) {
+				head = curr_element->next();
+				delete curr_element;
+				return;
+			}
+
 			// Delete the current element and patch the chain
 			prev_element->set_next(curr_element->next());
 			delete curr_element;

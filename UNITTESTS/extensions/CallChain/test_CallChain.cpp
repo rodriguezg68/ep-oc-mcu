@@ -34,7 +34,7 @@
 class TestCallChain : public testing::Test {
     
 	virtual void SetUp()
-	
+
     {
     }
 
