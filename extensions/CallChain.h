@@ -166,22 +166,11 @@ namespace ep {
 		void detach_all(void) {
 
 			/** Iterate through all elements and delete them */
-			CallChainLink *prev_element = NULL, *element = head;
-
-			/** No elements to remove */
-			if(!element) {
-				return;
+			while(head) {
+				CallChainLink* next_element = head->next();
+				delete head;
+				head = next_element;
 			}
-
-			while(element->next()) {
-				prev_element = element;
-				element = element->next();
-				delete prev_element;
-			}
-
-			/** Delete the last element */
-			delete element;
-
 		}
 
 		/**
