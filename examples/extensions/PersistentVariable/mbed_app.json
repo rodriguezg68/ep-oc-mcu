@@ -1,0 +1,9 @@
+{
+    "target_overrides": {
+	"*": {
+	    "target.device_has_add": ["FLASHIAP"],
+	    "target.components_add": ["FLASHIAP"],
+	    "storage.storage_type": "TDB_INTERNAL"
+	}
+    }
+}
