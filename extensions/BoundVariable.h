@@ -25,53 +25,58 @@
 
 #include "extensions/CallChain.h"
 
+namespace ep {
 /**
  * A BoundVariable is a variable that, when modified,
  * executes a callchain of handlers to notify interested parties
  * of the change.
  */
 template<typename T>
-class BoundVariable
-{
+class BoundVariable {
 public:
 
-	/** Empty constructor */
-	BoundVariable() { }
+    /** Empty constructor */
+    BoundVariable() {
+    }
 
-	/** Initialize constructor */
-	BoundVariable(const T& value) : _value(value) { }
+    /** Initialize constructor */
+    BoundVariable(const T& value) :
+            _value(value) {
+    }
 
-	T &operator= (const T &rhs) {
-		this->set(rhs);
-	}
+    T &operator=(const T &rhs) {
+        this->set(rhs);
+        return _value;
+    }
 
-	operator T() {
-		return _value;
-	}
+    operator T() {
+        return _value;
+    }
 
-	T get(void) {
-		return _value;
-	}
+    T get(void) {
+        return _value;
+    }
 
-	void set(T new_value) {
-		_value = new_value;
-		_callchain.call(_value);
-	}
+    void set(T new_value) {
+        _value = new_value;
+        _callchain.call(_value);
+    }
 
-	void attach(const mbed::Callback<void(T)>& cb) {
-		_callchain.attach(cb);
-	}
+    void attach(const mbed::Callback<void(T)>& cb) {
+        _callchain.attach(cb);
+    }
 
-	void detach(const mbed::Callback<void(T)>& cb) {
-		_callchain.detach(cb);
-	}
-
+    void detach(const mbed::Callback<void(T)>& cb) {
+        _callchain.detach(cb);
+    }
 
 protected:
 
-	T _value;
-	ep::CallChain<T> _callchain;
+    T _value;
+    ep::CallChain<T> _callchain;
 
 };
+
+}
 
 #endif /* DES0569_BSP_EP_CORE_EP_OC_MCU_EXTENSIONS_BOUNDVARIABLE_H_ */
