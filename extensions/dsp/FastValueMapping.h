@@ -37,8 +37,14 @@ namespace ep
      *
      * Subclasses may redefine how "in between" values are treated. This allows
      * different use cases to use the correct interpolation for their problem.
+     *
+     * @note: The reason this is a "fast" value mapping is that the x-values
+     * are evenly spaced, allowing the index of the y-value to be determined in a single operation.
+     *
+     * If x-values are not evenly spaced, the algorithm must first search the table and find
+     * the closest x values to the input x value. See "ValueMapping.h" for that kind of implementation
      */
-    class ValueMapping {
+    class FastValueMapping {
 
     public:
 
@@ -53,8 +59,11 @@ namespace ep
          * value in the y_table is the expected output for initial_x + x_spacing,
          * and so on.
          */
-        ValueMapping(float initial_x, float x_spacing, mbed::Span y_table) :
+        FastValueMapping(float initial_x, float x_spacing, mbed::Span y_table) :
         x0(initial_x), delta_x(x_spacing), table(y_table) { }
+
+        virtual ~FastValueMapping() {
+        }
 
         /**
          * Get the corresponding value to the input x
@@ -76,7 +85,7 @@ namespace ep
      * Linear Interpolation Value Mapping
      *
      */
-    class FastLinearlyInterpolatedValueMapping : public ValueMapping {
+    class FastLinearlyInterpolatedValueMapping : public FastValueMapping {
 
     public:
 
@@ -92,7 +101,7 @@ namespace ep
          * and so on.
          */
         FastLinearlyInterpolatedValueMapping(float initial_x, float x_spacing, mbed::Span y_table) :
-            ValueMapping(initial_x, x_spacing, y_table) {
+            FastValueMapping(initial_x, x_spacing, y_table) {
             // Fill out the instance information
             instance.x1 = initial_x;
             instance.xSpacing = x_spacing;
