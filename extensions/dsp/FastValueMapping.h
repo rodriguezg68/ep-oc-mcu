@@ -44,7 +44,7 @@ namespace ep
      * If x-values are not evenly spaced, the algorithm must first search the table and find
      * the closest x values to the input x value. See "ValueMapping.h" for that kind of implementation
      */
-    class FastValueMapping {
+    class ValueMapping {
 
     public:
 
@@ -59,10 +59,10 @@ namespace ep
          * value in the y_table is the expected output for initial_x + x_spacing,
          * and so on.
          */
-        FastValueMapping(float initial_x, float x_spacing, mbed::Span y_table) :
+        ValueMapping(float initial_x, float x_spacing, mbed::Span<float> y_table) :
         x0(initial_x), delta_x(x_spacing), table(y_table) { }
 
-        virtual ~FastValueMapping() {
+        virtual ~ValueMapping() {
         }
 
         /**
@@ -77,7 +77,7 @@ namespace ep
 
         float x0;
         float delta_x;
-        mbed::Span table;
+        mbed::Span<float> table;
 
     };
 
@@ -85,7 +85,7 @@ namespace ep
      * Linear Interpolation Value Mapping
      *
      */
-    class FastLinearlyInterpolatedValueMapping : public FastValueMapping {
+    class FastLinearlyInterpolatedValueMapping : public ValueMapping {
 
     public:
 
@@ -100,8 +100,8 @@ namespace ep
          * value in the y_table is the expected output for initial_x + x_spacing,
          * and so on.
          */
-        FastLinearlyInterpolatedValueMapping(float initial_x, float x_spacing, mbed::Span y_table) :
-            FastValueMapping(initial_x, x_spacing, y_table) {
+        FastLinearlyInterpolatedValueMapping(float initial_x, float x_spacing, mbed::Span<float> y_table) :
+            ValueMapping(initial_x, x_spacing, y_table) {
             // Fill out the instance information
             instance.x1 = initial_x;
             instance.xSpacing = x_spacing;
