@@ -23,19 +23,103 @@
 #ifndef EP_OC_MCU_VALUEMAPPING_H_
 #define EP_OC_MCU_VALUEMAPPING_H_
 
+/** Note: Requires CMSIS DSP library, see README.md */
+
+#include "arm_math.h"
+
+#include "platform/Span.h"
+
 namespace ep
 {
-    template<typename T, typename U>
+    /**
+     * Abstract class that maps values in one domain to values
+     * in another domain. eg: ADC counts to battery level remaining
+     *
+     * Subclasses may redefine how "in between" values are treated. This allows
+     * different use cases to use the correct interpolation for their problem.
+     */
     class ValueMapping {
 
     public:
 
-        ValueMapping();
+        /**
+         * Initialize a value mapping instance
+         * @param[in] initial_x First x value of data in the table
+         * @param[in] x_spacing Spacing of X values for table
+         * @param[in] y_table Table of y values
+         *
+         * @note The y_values table should be aligned such that the first
+         * value in the y_table is the expected output for initial_x, the second
+         * value in the y_table is the expected output for initial_x + x_spacing,
+         * and so on.
+         */
+        ValueMapping(float initial_x, float x_spacing, mbed::Span y_table) :
+        x0(initial_x), delta_x(x_spacing), table(y_table) { }
 
+        /**
+         * Get the corresponding value to the input x
+         * @param[in] x Input X value
+         *
+         * @retval y_value Interpolated output Y value based on table
+         */
+        virtual float get_value(float x) = 0;
 
+    protected:
+
+        float x0;
+        float delta_x;
+        mbed::Span table;
 
     };
 
+    /**
+     * Linear Interpolation Value Mapping
+     *
+     */
+    class FastLinearlyInterpolatedValueMapping : public ValueMapping {
+
+    public:
+
+        /**
+         * Initialize a value mapping instance
+         * @param[in] initial_x First x value of data in the table
+         * @param[in] x_spacing Spacing of X values for table
+         * @param[in] y_table Table of y values
+         *
+         * @note The y_values table should be aligned such that the first
+         * value in the y_table is the expected output for initial_x, the second
+         * value in the y_table is the expected output for initial_x + x_spacing,
+         * and so on.
+         */
+        FastLinearlyInterpolatedValueMapping(float initial_x, float x_spacing, mbed::Span y_table) :
+            ValueMapping(initial_x, x_spacing, y_table) {
+            // Fill out the instance information
+            instance.x1 = initial_x;
+            instance.xSpacing = x_spacing;
+            instance.nValues = y_table.size();
+            instance.pYData = y_table.data();
+        }
+
+        virtual ~FastLinearlyInterpolatedValueMapping() {
+        }
+
+        /**
+         * Get the corresponding value to the input x
+         * @param[in] x Input X value
+         *
+         * @retval y_value Interpolated output Y value based on table
+         */
+        virtual float get_value(float x) {
+            return arm_linear_interp_f32(&instance, x);
+        }
+
+
+    protected:
+
+        arm_linear_interp_instance_f32 instance;
+
+
+    };
 }
 
 
