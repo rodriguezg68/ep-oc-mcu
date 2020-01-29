@@ -83,7 +83,7 @@ extern "C"
 /**********************************************************************************************************************/
 
 /* Use the following bme680 driver: https://github.com/BoschSensortec/BME680_driver/releases/tag/bme680_v3.5.1 */
-#include "bme680.h"
+#include "bme680_driver.h"
 /* BSEC header files are available in the inc/ folder of the release package */
 #include "bsec_interface.h"
 #include "bsec_datatypes.h"

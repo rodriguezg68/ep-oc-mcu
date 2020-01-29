@@ -47,7 +47,7 @@
 
 /*! @file bme680.c
  @brief Sensor driver for BME680 sensor */
-#include "bme680.h"
+#include "bme680_driver.h"
 
 /*!
  * @brief This internal API is used to read the calibrated data from the sensor.

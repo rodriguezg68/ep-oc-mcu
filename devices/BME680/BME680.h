@@ -24,7 +24,7 @@
 #ifndef BME680_H
 #define BME680_H
 
-#include "bme680.h"
+#include "bme680_driver.h"
 #include "drivers/I2C.h"
 
 #define BME680_DEFAULT_ADDRESS (0x76 << 1)  // The default I2C address (shifted for MBed 8 bit address)
