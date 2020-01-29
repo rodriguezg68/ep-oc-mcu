@@ -24,6 +24,9 @@ Distributed as-is; no warranty is given.
 #include "LSM9DS1.h"
 #include "LSM9DS1_Registers.h"
 #include "LSM9DS1_Types.h"
+
+#include "platform/mbed_assert.h"
+
 //#include <Wire.h> // Wire library is used for I2C
 //#include <SPI.h>  // SPI library is used for...SPI.
 
@@ -1002,12 +1005,20 @@ void LSM9DS1::mWriteByte(uint8_t subAddress, uint8_t data)
 
 uint8_t LSM9DS1::xgReadByte(uint8_t subAddress)
 {
+
+  // Assert if the driver is misconfigured
+  MBED_ASSERT((settings.device.commInterface == IMU_MODE_I2C) ||
+	      (settings.device.commInterface == IMU_MODE_SPI));
+  
     // Whether we're using I2C or SPI, read a byte using the
     // gyro-specific I2C address or SPI CS pin.
     if (settings.device.commInterface == IMU_MODE_I2C)
         return I2CreadByte(_xgAddress, subAddress);
     else if (settings.device.commInterface == IMU_MODE_SPI)
         return SPIreadByte(_xgAddress, subAddress);
+
+    // Return 0 if the driver is misconfigured (shouldn't reach this point)
+    return 0;
 }
 
 void LSM9DS1::xgReadBytes(uint8_t subAddress, uint8_t * dest, uint8_t count)
@@ -1023,12 +1034,20 @@ void LSM9DS1::xgReadBytes(uint8_t subAddress, uint8_t * dest, uint8_t count)
 
 uint8_t LSM9DS1::mReadByte(uint8_t subAddress)
 {
+    // Assert if the driver is misconfigured
+    MBED_ASSERT((settings.device.commInterface == IMU_MODE_I2C) ||
+	        (settings.device.commInterface == IMU_MODE_SPI));
+  
     // Whether we're using I2C or SPI, read a byte using the
     // accelerometer-specific I2C address or SPI CS pin.
     if (settings.device.commInterface == IMU_MODE_I2C)
         return I2CreadByte(_mAddress, subAddress);
     else if (settings.device.commInterface == IMU_MODE_SPI)
         return SPIreadByte(_mAddress, subAddress);
+
+    // Return 0 if the driver is misconfigured (shouldn't reach this point)
+    return 0;
+    
 }
 
 void LSM9DS1::mReadBytes(uint8_t subAddress, uint8_t * dest, uint8_t count)
