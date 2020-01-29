@@ -55,7 +55,7 @@
 #ifndef BME680_SELFTEST_H_
 #define BME680_SELFTEST_H_
 
-#include "bme680.h"
+#include "bme680_driver.h"
 
 /*! CPP guard */
 #ifdef __cplusplus
