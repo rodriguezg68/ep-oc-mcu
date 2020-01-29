@@ -1008,6 +1008,9 @@ uint8_t LSM9DS1::xgReadByte(uint8_t subAddress)
         return I2CreadByte(_xgAddress, subAddress);
     else if (settings.device.commInterface == IMU_MODE_SPI)
         return SPIreadByte(_xgAddress, subAddress);
+
+    // Return 0 if the driver is misconfigured
+    return 0;
 }
 
 void LSM9DS1::xgReadBytes(uint8_t subAddress, uint8_t * dest, uint8_t count)
@@ -1029,6 +1032,10 @@ uint8_t LSM9DS1::mReadByte(uint8_t subAddress)
         return I2CreadByte(_mAddress, subAddress);
     else if (settings.device.commInterface == IMU_MODE_SPI)
         return SPIreadByte(_mAddress, subAddress);
+
+    // Return 0 if the driver is misconfigured
+    return 0;
+    
 }
 
 void LSM9DS1::mReadBytes(uint8_t subAddress, uint8_t * dest, uint8_t count)
