@@ -24,7 +24,7 @@
 #ifndef BME680_H
 #define BME680_H
 
-#include "bme680.h"
+#include "bme680_driver.h"
 #include "bsec_integration.h"
 #include "events/EventQueue.h"
 #include "rtos/Thread.h"
