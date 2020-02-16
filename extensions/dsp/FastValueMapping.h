@@ -25,6 +25,8 @@
 
 /** Note: Requires CMSIS DSP library, see README.md */
 
+#if USE_DSP
+
 #include "arm_math.h"
 
 #include "platform/Span.h"
@@ -131,5 +133,6 @@ namespace ep
     };
 }
 
+#endif /** USE_DSP */
 
 #endif /* DES0569_BSP_EP_CORE_EP_OC_MCU_EXTENSIONS_VALUEMAPPING_H_ */
