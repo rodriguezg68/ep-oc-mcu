@@ -71,7 +71,7 @@ namespace ep
          *
          * @retval y_value Interpolated output Y value based on table
          */
-        virtual float get_value(float x) = 0;
+        virtual float lookup(float x) = 0;
 
     protected:
 
@@ -118,7 +118,7 @@ namespace ep
          *
          * @retval y_value Interpolated output Y value based on table
          */
-        virtual float get_value(float x) {
+        virtual float lookup(float x) {
             return arm_linear_interp_f32(&instance, x);
         }
 

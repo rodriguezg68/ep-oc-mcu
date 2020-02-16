@@ -65,7 +65,7 @@ namespace ep
          *
          * @retval y_value Interpolated output Y value based on table
          */
-        virtual float get_value(float x) = 0;
+        virtual float lookup(float x) = 0;
 
     protected:
 
@@ -98,7 +98,7 @@ namespace ep
          *
          * @retval y_value Interpolated output Y value based on table
          */
-        virtual float get_value(float x) {
+        virtual float lookup(float x) {
 
             // Below the range of the table
             if(x <= table[0].x) {
@@ -106,13 +106,13 @@ namespace ep
             }
 
             // Above the range of the table
-            if(x >= table[table.size()].x) {
+            if(x >= table[table.size()-1].x) {
                 return table[table.size()].y;
             }
 
             // Find the closest values to the input x value
             int x0_index, x1_index;
-            for(int i = 0; i < table.size(); i++) {
+            for(int i = 0; i < table.size()-1; i++) {
                 if(table[i].x <= x && x <= table[i+1].x) {
                     x0_index = i;
                     x1_index = i+1;
