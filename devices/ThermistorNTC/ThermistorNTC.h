@@ -79,6 +79,30 @@ namespace ep
      * Several resistance-to-temperature conversion strategies are supported, including a
      * calibration lookup table as well as a simpler, but potentially less accurate,
      * direct calculation using beta values from the thermistor's datasheet.
+     *
+     * Example:
+     * @code
+     * #include "ThermistorNTC.h"
+     * #include "mbed_wait_api.h"
+     * #include "ge1923.h"
+     *
+     * #define NTC_ADC_PIN A0
+     *
+     * ep::ThermistorNTC ntc(NTC_ADC_PIN, 10000.0f, 3957.0f, 10000.0f);
+     *
+     * // Alternatively using a calibration table:
+     * ep::LinearlyInterpolatedValueMapping ge1923_map(
+     *         mbed::make_const_Span(ge1923::calibration_table));
+     *
+     * ep::ThermistorNTC ntc(NTC_ADC_PIN, 10000.0f, &ge1923_map);
+     *
+     * int main(void) {
+     *     while(true) {
+     *         printf("temperature: %.2fC\r\n", ntc.get_temperature());
+     *         wait_us(1000000);
+     *     }
+     * }
+     * @endcode
      */
     class ThermistorNTC
     {

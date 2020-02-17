@@ -43,7 +43,7 @@ ep::ThermistorNTC::ThermistorNTC(PinName adc_pin, float r_fixed, float beta, flo
 float ep::ThermistorNTC::read_adc(void) {
 
     /** Sample the adc to get the normalized (0 to 1) voltage */
-    float adc_sample = 1.0f;
+    float adc_sample = 0.0f;
 
     /** If averaging is enabled, take a few samples (might block for a little longer)*/
 #if MBED_CONF_THERMISTOR_NTC_AVERAGED_SAMPLES
@@ -65,7 +65,7 @@ float ep::ThermistorNTC::get_temperature(void) {
 
     // Make sure we don't divide by zero (NTC is open circuit!)
     if(adc_sample == 0.0f) {
-        adc_sample = 0.000001f;
+        adc_sample = 0.00000001f;
     }
 
     /**
