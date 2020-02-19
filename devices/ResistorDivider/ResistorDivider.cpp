@@ -25,6 +25,8 @@
 
 #include "platform/mbed_assert.h"
 
+using namespace ep;
+
 ResistorDivider::ResistorDivider(mbed::AnalogIn& adc_in, float r_pd, float r_pu,
         float vin_volts) : adc_in(adc_in), r_pu(r_pu), r_pd(r_pd), vin_volts(vin_volts) {
 

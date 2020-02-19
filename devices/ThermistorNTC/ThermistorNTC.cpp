@@ -31,48 +31,29 @@
 
 #define KELVIN_TO_CELSIUS(x) x-273.15f;
 
+using namespace ep;
 
-ep::ThermistorNTC::ThermistorNTC(PinName adc_pin, float r_fixed, ValueMapping* map) : adc_in(adc_pin),
-        r_to_t_map(map), beta_val(0.0f), r_fixed_ohms(r_fixed), r_room_temp_ohms(0.0f) {
+ThermistorNTC::ThermistorNTC(ResistorDivider& r_div, float r_fixed,
+        ValueMapping* map, bool ntc_is_pull_up) : r_div(r_div),
+        r_to_t_map(map), beta_val(0.0f), r_fixed_ohms(r_fixed),
+        r_room_temp_ohms(0.0f), ntc_is_pull_up(ntc_is_pull_up) {
 }
 
-ep::ThermistorNTC::ThermistorNTC(PinName adc_pin, float r_fixed, float beta, float r_room_temp) : adc_in(adc_pin),
-        r_to_t_map(NULL), beta_val(beta), r_fixed_ohms(r_fixed), r_room_temp_ohms(r_room_temp) {
+ThermistorNTC::ThermistorNTC(ResistorDivider& r_div, float r_fixed, float beta,
+        float r_room_temp, bool ntc_is_pull_up) : r_div(r_div),
+        r_to_t_map(NULL), beta_val(beta), r_fixed_ohms(r_fixed),
+        r_room_temp_ohms(r_room_temp), ntc_is_pull_up(ntc_is_pull_up) {
 }
 
-float ep::ThermistorNTC::read_adc(void) {
+float ThermistorNTC::get_temperature(void) {
 
-    /** Sample the adc to get the normalized (0 to 1) voltage */
-    float adc_sample = 0.0f;
-
-    /** If averaging is enabled, take a few samples (might block for a little longer)*/
-#if MBED_CONF_THERMISTOR_NTC_AVERAGED_SAMPLES
-    for(int i = 0; i < MBED_CONF_THERMISTOR_NTC_AVERAGED_SAMPLES; i++) {
-        adc_sample += adc_in.read();
+    // Get the thermistor's resistance
+    float r_thermistor;
+    if(ntc_is_pull_up) {
+        r_thermistor = r_div.get_R_pu_ohms();
+    } else {
+        r_thermistor = r_div.get_R_pd_ohms();
     }
-
-    adc_sample /= MBED_CONF_THERMISTOR_NTC_AVERAGED_SAMPLES;
-#else
-    adc_sample = adc_in.read();
-#endif
-
-    return adc_sample;
-}
-
-float ep::ThermistorNTC::get_temperature(void) {
-
-    float adc_sample = this->read_adc();
-
-    // Make sure we don't divide by zero (NTC is open circuit!)
-    if(adc_sample == 0.0f) {
-        adc_sample = 0.00000001f;
-    }
-
-    /**
-     * Calculate the thermistor's resistance in ohms
-     * R_thermistor = R_fixed * ((1/adc_sample)-1)
-     */
-    float r_thermistor = (r_fixed_ohms*((1.0f/adc_sample)-1));
 
     // If a table was given in the constructor, use the lookup table method
     if(r_to_t_map != NULL) {

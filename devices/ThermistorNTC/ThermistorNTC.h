@@ -30,10 +30,7 @@
 #ifndef EP_OC_MCU_DEVICES_THERMISTORNTC_THERMISTORNTC_H_
 #define EP_OC_MCU_DEVICES_THERMISTORNTC_THERMISTORNTC_H_
 
-/** The target must have an ADC to use this thermistor class */
-#if DEVICE_ANALOGIN
-
-#include "drivers/AnalogIn.h"
+#include "ResistorDivider.h"
 
 #include "ValueMapping.h"
 
@@ -72,7 +69,9 @@ namespace ep
      *                    +-+
      *                     -
      *
-     * Note: For this API the NTC MUST be the pull-up resistor in the voltage divider
+     * The NTC thermistor may be either the pull-down or pull-up resistor in the
+     * divider circuit. The API assumes it is the pull-up by default. See the constructor
+     * for more information.
      *
      * Typically R_fixed is selected to be equal to R_NTC @ room temperature (25.0C)
      *
@@ -112,30 +111,33 @@ namespace ep
          * Constructor for temperature conversion using a calibrated lookup
          * table.
          *
-         * @param[in] adc_pin Pin to collect analog voltage readings
+         * @param[in] r_div ResistorDivider instance to use when measuring the thermistor's resistance
          * @param[in] r_fixed Fixed resistance in voltage divider sense circuit (ohms)
          * @param[in] map ValueMapping object that provides the resistance (ohms) to temperature (C) table
+         * @param[in] ntc_is_pull_up (optional) True if the NTC is the pull-up resistor in the divider circuit
          *
          * @note See the ValueMapping API documentation for how to create an appropriate
          * ValueMapping object to pass in
          *
          */
-        ThermistorNTC(PinName adc_pin, float r_fixed, ValueMapping *map);
+        ThermistorNTC(ResistorDivider& r_div, float r_fixed, ValueMapping *map, bool ntc_is_pull_up = true);
 
         /**
          * Constructor for temperature conversion using a direct calculation
          * from a beta value given in the thermistor's datasheet.
          *
-         * @param[in] adc_pin Pin to collect analog voltage readings
+         * @param[in] r_div ResistorDivider instance to use when measuring the thermistor's resistance
          * @param[in] r_fixed Fixed resistance in voltage divider sense circuit (ohms)
          * @param[in] beta Beta value for thermistor given by device's datasheet
          * @param[in] r_room_temp Nominal resistance of NTC thermistor (ohms) @ room temperature (25C)
+         * @param[in] ntc_is_pull_up (optional) True if the NTC is the pull-up resistor in the divider circuit
+         *
          *
          * @note This may be less accurate than the lookup table approach but is far
          * easier to implement
          *
          */
-        ThermistorNTC(PinName adc_pin, float r_fixed, float beta, float r_room_temp);
+        ThermistorNTC(ResistorDivider& r_div, float r_fixed, float beta, float r_room_temp, bool ntc_is_pull_up = true);
 
         virtual ~ThermistorNTC() { }
 
@@ -154,26 +156,16 @@ namespace ep
 
     protected:
 
-        /**
-         * Internal function to read the ADC with configured averaging strategy (see mbed_lib.json)
-         *
-         * @retval Normalized (0 to 1) adc reading
-         */
-        float read_adc(void);
-
-    protected:
-
-        mbed::AnalogIn adc_in;
+        ResistorDivider& r_div;     /** ResistorDivider used to measure the thermistor's resistance */
 
         ValueMapping *r_to_t_map;   /** ValueMapping for resistance to temperature, if given */
         float beta_val;             /** Beta value for thermistor given by datasheet, if given */
         float r_fixed_ohms;         /** Fixed resistance in voltage divider sense circuit in ohms */
         float r_room_temp_ohms;     /** Nominal temperature of thermistor at room temp in ohms, if given */
 
+        bool ntc_is_pull_up;        /** True if NTC is the pull-up in the divider circuit, false if pull-down */
     };
 
 }
-
-#endif
 
 #endif /* EP_OC_MCU_DEVICES_THERMISTORNTC_THERMISTORNTC_H_ */
