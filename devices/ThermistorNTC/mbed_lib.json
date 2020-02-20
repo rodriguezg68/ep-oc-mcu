@@ -1,9 +1,0 @@
-{
-    "name": "thermistor-ntc",
-    "config": {
-        "averaged-samples": {
-            "help": "Number of adc samples to average for temperature reading. Set to 0 to disable",
-            "value": 10
-        }
-    }
-}
