@@ -76,8 +76,6 @@ namespace ep {
 	 * A linked-list structure of Callbacks that are triggered
 	 * by a common event.
 	 *
-	 * The Link template parameter defaults to a basic CallbackChainLink.
-	 *
 	 * If the application needs to add more information to the CallChainLink
 	 * (eg: an invidual threshold for each handler) it can do so by replacing
 	 * this Link type
