@@ -38,6 +38,8 @@ namespace ep
      *
      * @note: If the x-values in your data are evenly spaced, you can use a faster
      * implementation available. See "FastValueMapping.h" for more information
+     *
+     * @note: X values MUST be in increasing order! (lowest to highest X)
      */
     class ValueMapping {
 
@@ -54,7 +56,7 @@ namespace ep
          * Initialize a value mapping instance
          * @param[in] value_map Table of x and y values
          */
-        ValueMapping(mbed::Span<value_map_entry_t> value_map) : table(value_map) { }
+        ValueMapping(const mbed::Span<const value_map_entry_t> value_map) : table(value_map) { }
 
         virtual ~ValueMapping() {
         }
@@ -69,7 +71,7 @@ namespace ep
 
     protected:
 
-        mbed::Span<value_map_entry_t> table;
+        const mbed::Span<const value_map_entry_t> table;
 
     };
 
@@ -85,7 +87,7 @@ namespace ep
          * Initialize a value mapping instance
          * @param[in] value_map Table of x and y values
          */
-        LinearlyInterpolatedValueMapping(mbed::Span<value_map_entry_t> value_map) :
+        LinearlyInterpolatedValueMapping(const mbed::Span<const value_map_entry_t> value_map) :
             ValueMapping(value_map) {
         }
 
