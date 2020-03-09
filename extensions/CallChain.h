@@ -56,17 +56,14 @@ namespace ep {
             this->cb.call(args...);
         }
 
-        friend bool operator==(const CallChainLink<ArgTs...> &l1, const CallChainLink<ArgTs...> &l2);
-        friend bool operator!=(const CallChainLink<ArgTs...> &l1, const CallChainLink<ArgTs...> &l2);
-
-        bool operator==(const CallChainLink<ArgTs...> &l1, const CallChainLink<ArgTs...> &l2) {
+        virtual bool operator==(const CallChainLink<ArgTs...> &rhs) {
             // Compare based on Callback equivalency
-            return (l1.cb == l2.cb);
+            return (this->cb == rhs.cb);
         }
 
-        bool operator!=(const CallChainLink<ArgTs...> &l1, const CallChainLink<ArgTs...> &l2) {
+        virtual bool operator!=(const CallChainLink<ArgTs...> &rhs) {
             // Compare based on Callback equivalency
-            return (l1.cb != l2.cb);
+            return (this->cb != rhs.cb);
         }
 
     protected:
