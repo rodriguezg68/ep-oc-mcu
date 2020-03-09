@@ -109,7 +109,7 @@ namespace ep
 
             // Above the range of the table
             if(x >= table[table.size()-1].x) {
-                return table[table.size()].y;
+                return table[table.size()-1].y;
             }
 
             // Find the closest values to the input x value
