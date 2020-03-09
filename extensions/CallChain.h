@@ -34,6 +34,11 @@ namespace ep {
 
     /**
      * API for a CallChainLink
+     *
+     * The callchain API can be extended by subclassing this class.
+     *
+     * eg: if you need to add more information to a callback (variable threshold, etc)
+     * then you can create a subclass that adds this information.
      */
     template<typename... ArgTs>
     class CallChainLink
@@ -41,23 +46,34 @@ namespace ep {
 
     public:
 
+        CallChainLink(mbed::Callback<void(ArgTs...)> cb) : cb(cb) {
+
+        }
+
         virtual ~CallChainLink() { }
 
-        virtual void call(ArgTs... args) = 0;
+        virtual void call(ArgTs... args) {
+            this->cb.call(args...);
+        }
+
+        friend bool operator==(const CallChainLink<ArgTs...> &l1, const CallChainLink<ArgTs...> &l2);
+        friend bool operator!=(const CallChainLink<ArgTs...> &l1, const CallChainLink<ArgTs...> &l2);
+
+        bool operator==(const CallChainLink<ArgTs...> &l1, const CallChainLink<ArgTs...> &l2) {
+            // Compare based on Callback equivalency
+            return (l1.cb == l2.cb);
+        }
+
+        bool operator!=(const CallChainLink<ArgTs...> &l1, const CallChainLink<ArgTs...> &l2) {
+            // Compare based on Callback equivalency
+            return (l1.cb != l2.cb);
+        }
+
+    protected:
+
+        mbed::Callback<void(ArgTs...)> cb;
 
     };
-
-    /**
-     * Default basic callback CallChainLink
-     *
-     * @note The inherintance order matters in this case as
-     * both mbed::Callback and ep::CallChainLink define a method named "call".
-     * In this case we want to use the one defined by mbed::Callback.
-     */
-    template<typename... ArgTs>
-    class CallbackChainLink : public mbed::Callback<void(ArgTs...)>, public CallChainLink<ArgTs...>
-    { };
-
 
 	/**
 	 * A linked-list structure of Callbacks that are triggered
@@ -71,12 +87,9 @@ namespace ep {
 	 *
 	 * @note: this API does NOT guarantee ANY specific order of execution!
 	 */
-	template<typename... ArgTs, typename Link = CallbackChainLink<ArgTs...>>
-	class CallChain : private mbed::NonCopyable<CallChain<ArgTs..., Link>>
+	template<typename... ArgTs>
+	class CallChain : private mbed::NonCopyable<CallChain<ArgTs...>>
 	{
-
-	    /** Restrict the Link template parameter to subclasses of CallChainLink */
-	    static_assert(std::is_base_of<CallChainLink, Link>::value, "Link must be derived from CallChainLink");
 
 	public:
 
@@ -88,12 +101,12 @@ namespace ep {
 		}
 
 		/** Attach a callback to the callchain
-		 * @param[in] callback Callback to attached to the callchain
+		 * @param[in] callback Callback to attach to the callchain
 		 */
-		virtual void attach(const Link& callback) {
+		virtual void attach(const CallChainLink<ArgTs...>& callback) {
 
 			/** Make sure a duplicate isn't being added */
-			for(LinkCallback cb : chain) {
+			for(CallChainLink<ArgTs...> cb : chain) {
 				if(cb == callback) {
 					return;
 				}
@@ -103,6 +116,14 @@ namespace ep {
 			chain.push_front(callback);
 		}
 
+        /**
+         * Attach a callback to the callchain, initializing with a Callback instance
+         * @param[in] callback Callback to attach to the callchain
+         */
+        virtual void attach(const mbed::Callback<void(ArgTs...)>& cb) {
+            this->attach(CallChainLink<ArgTs...>(cb));
+        }
+
 		/**
 		 * Detach
 		 * @param[in] callback Callback to remove from the callchain
@@ -110,9 +131,20 @@ namespace ep {
 		 * @note: The callback object does not have to be the same exact
 		 * object. Equivalency is based on memory comparison, not pointer comparison
 		 */
-		virtual void detach(const Link& callback) {
+		virtual void detach(const CallChainLink<ArgTs...>& callback) {
 			chain.remove(callback);
 		}
+
+        /**
+         * Detach, initializing with a Callback instance
+         * @param[in] callback Callback to remove from the callchain
+         *
+         * @note: The callback object does not have to be the same exact
+         * object. Equivalency is based on memory comparison, not pointer comparison
+         */
+        virtual void detach(const mbed::Callback<void(ArgTs...)>& cb) {
+            this->detach(CallChainLink<ArgTs...>(cb));
+        }
 
 		void detach_all(void) {
 			chain.clear();
@@ -124,7 +156,7 @@ namespace ep {
 		 */
 		void call(ArgTs... args) {
 
-			for(Link cb : chain) {
+			for(CallChainLink<ArgTs...> cb : chain) {
 				cb.call(args...);
 			}
 		}
@@ -135,44 +167,7 @@ namespace ep {
 
 	protected:
 
-		std::forward_list<Link> chain; /** Singly-linked list to store callbacks */
-	};
-
-	/**
-	 * Template-specialized CallChain with the basic CallbackChainLink
-	 */
-	template<typename... ArgTs>
-	class CallChain<ArgTs... , CallbackChainLink<ArgTs...>> {
-
-	public:
-
-        /** Attach a callback to the callchain
-         * @param[in] callback Callback to attached to the callchain
-         */
-        virtual void attach(const ) {
-
-            /** Make sure a duplicate isn't being added */
-            for(LinkCallback cb : chain) {
-                if(cb == callback) {
-                    return;
-                }
-            }
-
-            /** Made it here, add the callback to the end of the list */
-            chain.push_front(callback);
-        }
-
-        /**
-         * Detach
-         * @param[in] callback Callback to remove from the callchain
-         *
-         * @note: The callback object does not have to be the same exact
-         * object. Equivalency is based on memory comparison, not pointer comparison
-         */
-        virtual void detach(const Link& callback) {
-            chain.remove(callback);
-        }
-
+		std::forward_list<CallChainLink<ArgTs...>> chain; /** Singly-linked list to store callbacks */
 	};
 }
 
