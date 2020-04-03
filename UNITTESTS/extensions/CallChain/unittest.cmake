@@ -12,7 +12,7 @@ set(unittest-includes ${unittest-includes}
 )
 
 set(unittest-sources
-  ../../mbed-os/UNITTESTS/stubs/mbed_assert_stub.c
+  ../../mbed-os/UNITTESTS/stubs/mbed_assert_stub.cpp
 )
 
 set(unittest-test-sources
