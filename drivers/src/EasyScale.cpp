@@ -34,6 +34,7 @@
 #define EASYSCALE_SHORT_DELAY_US 10
 
 uint8_t EasyScale::DEVICE_ADDRESS_TPS61158 = 0x58;
+uint8_t EasyScale::DEVICE_ADDRESS_TPS61165 = 0x72;
 
 EasyScale::EasyScale(PinName ctrl_pin) :
 							es_ctrl_pin(ctrl_pin, PIN_OUTPUT, PullNone, 0)

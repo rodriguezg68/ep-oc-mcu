@@ -37,6 +37,7 @@ class EasyScale
 	public:
 
 		static uint8_t DEVICE_ADDRESS_TPS61158;		/** Device address for TPS61158 backlight driver IC */
+		static uint8_t DEVICE_ADDRESS_TPS61165;     /** Device address for TPS61165 backlight driver IC */
 
 	public:
 
