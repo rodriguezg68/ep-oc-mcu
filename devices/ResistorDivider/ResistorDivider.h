@@ -89,7 +89,7 @@ namespace ep
          *
          */
         ResistorDivider(mbed::AnalogIn& adc_in, float r_pd,
-                float r_pu = UnknownVal, float vin_volts = MBED_CONF_DRIVERS_DEFAULT_ADC_VREF);
+                float r_pu = UnknownVal, float vin_volts = MBED_CONF_TARGET_DEFAULT_ADC_VREF);
 
         /**
          * Returns the known or calculated resistance

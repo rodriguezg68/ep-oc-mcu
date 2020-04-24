@@ -41,7 +41,7 @@ float ResistorDivider::get_R_pu_ohms(void) {
         return r_pu;
     } else {
         // Calculate pu
-        return (r_pd * ((vin_volts / adc_in.read_volts()) - 1.0f));
+        return (r_pd * ((vin_volts / adc_in.read_voltage()) - 1.0f));
     }
 }
 
@@ -51,7 +51,7 @@ float ResistorDivider::get_R_pd_ohms(void) {
         return r_pd;
     } else {
         // Calculate pd
-        return (r_pu * (1.0f / ((vin_volts / adc_in.read_volts()) - 1.0f)));
+        return (r_pu * (1.0f / ((vin_volts / adc_in.read_voltage()) - 1.0f)));
     }
 }
 
@@ -61,6 +61,6 @@ float ResistorDivider::get_Vin_volts(void) {
         return vin_volts;
     } else {
         // Calculate vin_volts
-        return (((r_pu + r_pd) / r_pd) * adc_in.read_volts());
+        return (((r_pu + r_pd) / r_pd) * adc_in.read_voltage());
     }
 }
