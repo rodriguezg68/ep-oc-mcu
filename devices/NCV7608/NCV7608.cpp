@@ -87,11 +87,11 @@ NCV7608::ChannelOut NCV7608::channel(int num) {
     return ChannelOut(*this, num);
 }
 
-uint16_t NCV7608::batch_write(uint8_t channel_bits, uint8_t ol_bits) {
+uint16_t NCV7608::batch_write(uint16_t new_state) {
 
     assert_cs();
 
-    _cached_state = ((channel_bits << 8) | ol_bits);
+    _cached_state = new_state;
 
     uint16_t diag_flipped = _spi.write(_cached_state);
     _cached_diag = ((diag_flipped & 0xFF00) >> 8);
@@ -102,8 +102,7 @@ uint16_t NCV7608::batch_write(uint8_t channel_bits, uint8_t ol_bits) {
 }
 
 uint16_t NCV7608::sync(void) {
-    return batch_write((uint8_t) ((_cached_state & 0xFF00) >> 8),
-            (uint8_t) (_cached_state & 0x00FF));
+    return batch_write(_cached_state);
 }
 
 NCV7608::ChannelOut::ChannelOut(NCV7608& ncv7608, int channel_num) :
@@ -130,8 +129,7 @@ void NCV7608::ChannelOut::write(int value) {
     }
 
     // Write out the value
-    _parent.batch_write((uint8_t) ((new_state & 0xFF00) >> 8),
-            (uint8_t) (new_state & 0x00FF));
+    _parent.batch_write(new_state);
 
     // Unlock the device mutex
     _parent.mutex.unlock();
@@ -192,8 +190,7 @@ void NCV7608::ChannelOut::enable_open_load_diag(void) {
     new_state |= (0x80 >> _num);
 
     // Write out the value
-    _parent.batch_write((uint8_t) ((new_state & 0xFF00) >> 8),
-            (uint8_t) (new_state & 0x00FF));
+    _parent.batch_write(new_state);
 
     // Unlock the device mutex
     _parent.mutex.unlock();
@@ -211,8 +208,7 @@ void NCV7608::ChannelOut::disable_open_load_diag(void) {
     new_state &= ~(0x80 >> _num);
 
     // Write out the value
-    _parent.batch_write((uint8_t) ((new_state & 0xFF00) >> 8),
-            (uint8_t) (new_state & 0x00FF));
+    _parent.batch_write(new_state);
 
     // Unlock the device mutex
     _parent.mutex.unlock();

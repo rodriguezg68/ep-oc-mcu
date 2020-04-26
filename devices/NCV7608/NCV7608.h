@@ -239,19 +239,29 @@ public:
      * parallel to achieve a higher current capacity or you are
      * using multiple outputs in a motor control application.
      *
-     * @param[in] channel_bits Each desired channel state is represented by
-     * a bit in this number. The bit corresponds to channel ((7 - bit_pos) + 1).
-     * (eg: bit 7 represents the desired state of channel 1, 1 = on, 0 = off)
-     *
-     * @param[in] open_load_en Similar to channel bits, each bit in this
-     * number represents whether open-load diagnostics are desired on
-     * the given channel. 0 = not enabled, 1 = enabled. Defaults to disabled.
+     * @param[in] new_state Each desired channel state is represented by
+     * a bit in the MSB of this number. The bit corresponds to channel ((15 - bit_pos) + 1).
+     * (eg: bit 15 represents the desired state of channel 1, 1 = on, 0 = off)
+     * Each bit in the LSB of this number represents whether open-load diagnostics are
+     * desired on the given channel. 0 = not enabled, 1 = enabled.
+     * Defaults to disabled.
      *
      * @retval diag_bits 16-bit output from NCV7608 representing the diagnostics
      * state of each channel. If you are using the ChannelOut API there are
      * convenience functions to interpret this information for you.
+     *
+     * @note The open-load diagnostics only work with the channel off. Due
+     * to the way they work, enabling open-load diagnostics may sink enough
+     * current to dimly illuminate LED loads. This is why it defaults to off.
      */
-    uint16_t batch_write(uint8_t channel_bits, uint8_t ol_bits = 0x00);
+    uint16_t batch_write(uint16_t new_state);
+
+    /**
+     * Returns the cached channel state
+     */
+    uint16_t get_cached_state(void) {
+        return _cached_state;
+    }
 
 protected:
 
@@ -264,13 +274,6 @@ protected:
      * Deasserts the chip select line, if separate from SPI instance
      */
     void deassert_cs(void);
-
-    /**
-     * Returns the cached channel state
-     */
-    uint16_t get_cached_state(void) {
-        return _cached_state;
-    }
 
     /**
      * Returns the cached diagnostics bits
