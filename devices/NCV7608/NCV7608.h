@@ -1,8 +1,24 @@
-/*
- * NCV7608.h
+/**
+ * ep-oc-mcu
+ * Embedded Planet Open Core for Microcontrollers
  *
- *  Created on: Apr 24, 2020
- *      Author: gdbeckstein
+ * Built with ARM Mbed-OS
+ *
+ * Copyright (c) 2019-2020 Embedded Planet, Inc.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
  */
 
 #ifndef EP_OC_MCU_DEVICES_NCV7608_NCV7608_H_
@@ -224,7 +240,7 @@ public:
      * using multiple outputs in a motor control application.
      *
      * @param[in] channel_bits Each desired channel state is represented by
-     * a bit in this number. The bit corresponds to channel (bit_pos) - 7.
+     * a bit in this number. The bit corresponds to channel ((7 - bit_pos) + 1).
      * (eg: bit 7 represents the desired state of channel 1, 1 = on, 0 = off)
      *
      * @param[in] open_load_en Similar to channel bits, each bit in this
