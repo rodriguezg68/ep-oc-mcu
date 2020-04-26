@@ -92,10 +92,7 @@ uint16_t NCV7608::batch_write(uint16_t new_state) {
     assert_cs();
 
     _cached_state = new_state;
-
-    uint16_t diag_flipped = _spi.write(_cached_state);
-    _cached_diag = ((diag_flipped & 0xFF00) >> 8);
-    _cached_diag |= ((diag_flipped & 0xFF) << 8);
+    _cached_diag = _spi.write(_cached_state);
 
     deassert_cs();
     return _cached_diag;
@@ -152,7 +149,7 @@ NCV7608::fault_condition_t NCV7608::ChannelOut::get_fault(void) {
     _parent.mutex.unlock();
 
     // First see if there's a fault reported on this channel
-    if (!(diag_bits & (0x80 >> (_num + 1)))) {
+    if (!(diag_bits & (0x4000 >> _num))) {
         // No fault, return here
         return NO_FAULT;
     }
