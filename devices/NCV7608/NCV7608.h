@@ -11,6 +11,8 @@
 #include "drivers/SPI.h"
 #include "drivers/DigitalOut.h"
 
+#include "platform/PlatformMutex.h"
+
 namespace ep {
 
 /**
@@ -261,6 +263,11 @@ protected:
         return _cached_diag;
     }
 
+    /**
+     * Sync the cached state and diagnostic bits
+     */
+    uint16_t sync(void);
+
 protected:
 
     mbed::SPI& _spi;
@@ -269,6 +276,8 @@ protected:
 
     uint16_t _cached_state; /** Cached channel on/off state bits */
     uint16_t _cached_diag;  /** Cached diagnostics bits */
+
+    PlatformMutex mutex;
 
 };
 
