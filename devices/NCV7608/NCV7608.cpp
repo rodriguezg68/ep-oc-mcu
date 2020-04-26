@@ -111,7 +111,7 @@ NCV7608::ChannelOut::ChannelOut(NCV7608& ncv7608, int channel_num) :
 void NCV7608::ChannelOut::write(int value) {
 
     // Lock the device mutex
-    _parent.mutex.lock();
+    _parent._mutex.lock();
 
     // Get the cached channel states
     uint16_t new_state = _parent.get_cached_state();
@@ -129,7 +129,7 @@ void NCV7608::ChannelOut::write(int value) {
     _parent.batch_write(new_state);
 
     // Unlock the device mutex
-    _parent.mutex.unlock();
+    _parent._mutex.unlock();
 
 }
 
@@ -140,13 +140,13 @@ int NCV7608::ChannelOut::read() {
 NCV7608::fault_condition_t NCV7608::ChannelOut::get_fault(void) {
 
     // Lock the device mutex
-    _parent.mutex.lock();
+    _parent._mutex.lock();
 
     // Sync diagnostic bits
     uint16_t diag_bits = _parent.sync();
 
     // Unlock the device mutex
-    _parent.mutex.unlock();
+    _parent._mutex.unlock();
 
     // First see if there's a fault reported on this channel
     if (!(diag_bits & (0x4000 >> _num))) {
@@ -178,7 +178,7 @@ NCV7608::fault_condition_t NCV7608::ChannelOut::get_fault(void) {
 void NCV7608::ChannelOut::enable_open_load_diag(void) {
 
     // Lock the device mutex
-    _parent.mutex.lock();
+    _parent._mutex.lock();
 
     // Get the cached channel states
     uint16_t new_state = _parent.get_cached_state();
@@ -190,13 +190,13 @@ void NCV7608::ChannelOut::enable_open_load_diag(void) {
     _parent.batch_write(new_state);
 
     // Unlock the device mutex
-    _parent.mutex.unlock();
+    _parent._mutex.unlock();
 }
 
 void NCV7608::ChannelOut::disable_open_load_diag(void) {
 
     // Lock the device mutex
-    _parent.mutex.lock();
+    _parent._mutex.lock();
 
     // Get the cached channel states
     uint16_t new_state = _parent.get_cached_state();
@@ -208,7 +208,7 @@ void NCV7608::ChannelOut::disable_open_load_diag(void) {
     _parent.batch_write(new_state);
 
     // Unlock the device mutex
-    _parent.mutex.unlock();
+    _parent._mutex.unlock();
 
 }
 

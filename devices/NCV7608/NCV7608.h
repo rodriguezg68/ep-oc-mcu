@@ -296,7 +296,7 @@ protected:
     uint16_t _cached_state; /** Cached channel on/off state bits */
     uint16_t _cached_diag;  /** Cached diagnostics bits */
 
-    PlatformMutex mutex;
+    PlatformMutex _mutex;
 
 };
 
