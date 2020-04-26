@@ -227,26 +227,32 @@ public:
      * number represents whether open-load diagnostics are desired on
      * the given channel. 0 = not enabled, 1 = enabled. Defaults to disabled.
      *
-     * @retval diag_bits 32-bit output from NCV7608 representing the diagnostics
+     * @retval diag_bits 32-bit output from NCV7751 representing the diagnostics
      * state of each channel. If you are using the ChannelOut API there are
      * convenience functions to interpret this information for you.
      */
-    uint32_t batch_write(uint16_t channel_bits, uint16_t ol_bits = 0x0);
+    uint32_t write_state(uint16_t channel_bits, uint16_t ol_bits = 0x0);
 
 protected:
 
     /**
-     * Writes a new 32-bit state to the NCV7751
-     * @param[in] state New state to write
-     * @retval diag_bits See ::batch_write
+     * Sync the cached state and diagnostic bits
+     * @retval diag_bits Sync'd diagnostic bits
      */
-    uint32_t write_state(uint32_t state);
+    uint32_t sync(void);
 
     /**
-     * Returns the cached channel state
+     * Returns the channel on/off bits
      */
-    uint32_t get_cached_state(void) {
-        return _cached_state;
+    uint16_t get_channel_bits(void) {
+        return _channel_bits;
+    }
+
+    /**
+     * Returns the open-load enable/disable bits
+     */
+    uint16_t get_ol_bits(void) {
+        return _ol_bits;
     }
 
     /**
@@ -263,7 +269,9 @@ protected:
     mbed::DigitalOut _csb2;
     mbed::DigitalOut* _global_en;
 
-    uint32_t _cached_state; /** Cached channel on/off state bits */
+    uint16_t _channel_bits; /** Channel on/off bits */
+    uint16_t _ol_bits;      /** Open-load enable/disable bits */
+
     uint32_t _cached_diag;  /** Cached diagnostics bits */
 
     PlatformMutex _mutex;
