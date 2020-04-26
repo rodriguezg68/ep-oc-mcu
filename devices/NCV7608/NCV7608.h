@@ -224,12 +224,12 @@ public:
      * using multiple outputs in a motor control application.
      *
      * @param[in] channel_bits Each desired channel state is represented by
-     * a bit in this number. The bit corresponds to channel (bit_pos) + 1.
-     * (eg: bit 0 represents the desired state of channel 1, 1 = on, 0 = off)
+     * a bit in this number. The bit corresponds to channel (bit_pos) - 7.
+     * (eg: bit 7 represents the desired state of channel 1, 1 = on, 0 = off)
      *
      * @param[in] open_load_en Similar to channel bits, each bit in this
      * number represents whether open-load diagnostics are desired on
-     * the given channel. 0 = not enabled, 1 = enabled. Defaults to enabled.
+     * the given channel. 0 = not enabled, 1 = enabled. Defaults to disabled.
      *
      * @retval diag_bits 16-bit output from NCV7608 representing the diagnostics
      * state of each channel. If you are using the ChannelOut API there are
