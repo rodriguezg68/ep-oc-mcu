@@ -233,7 +233,7 @@ public:
      * state of each channel. If you are using the ChannelOut API there are
      * convenience functions to interpret this information for you.
      */
-    uint16_t batch_write(uint8_t channel_bits, uint8_t ol_bits = 0xFF);
+    uint16_t batch_write(uint8_t channel_bits, uint8_t ol_bits = 0x00);
 
 protected:
 

@@ -15,8 +15,8 @@
 using namespace ep;
 
 NCV7608::NCV7608(mbed::SPI& spi, PinName csb, PinName global_en) :
-        _spi(spi), _cs(nullptr), _global_en(nullptr),
-        _cached_state(0), _cached_diag(0) {
+        _spi(spi), _cs(nullptr), _global_en(nullptr), _cached_state(0), _cached_diag(
+                0) {
 
     // Instantiate optional control outputs
     if (csb != NC) {
@@ -73,14 +73,23 @@ NCV7608::ChannelOut NCV7608::channel(int num) {
 
 uint16_t NCV7608::batch_write(uint8_t channel_bits, uint8_t ol_bits) {
     assert_cs();
+
     _cached_state = ((ol_bits << 8) | channel_bits);
-    _cached_diag = _spi.write(_cached_state);
+
+    // Take care of endianness conversion
+    uint16_t flipped = ((_cached_state & 0xFF00) >> 8);
+    flipped |= ((_cached_state & 0xFF) << 8);
+
+    uint16_t diag_flipped = _spi.write(flipped);
+    _cached_diag = ((diag_flipped & 0xFF00) >> 8);
+    _cached_diag |= ((diag_flipped & 0xFF) << 8);
+
     deassert_cs();
     return _cached_diag;
 }
 
 NCV7608::ChannelOut::ChannelOut(NCV7608& ncv7608, int channel_num) :
-        _parent(ncv7608), _num(channel_num) {
+        _parent(ncv7608), _num(channel_num - 1) {
     // Only channels 1 through 8 are supported
     MBED_ASSERT((0 < channel_num) && (channel_num <= 8));
 }
@@ -113,7 +122,7 @@ NCV7608::fault_condition_t NCV7608::ChannelOut::get_fault(void) {
     uint16_t diag_bits = _parent.get_cached_diag();
 
     // First see if there's a fault reported on this channel
-    if(!(diag_bits & (1 << (_num + 1)))) {
+    if (!(diag_bits & (1 << (_num + 1)))) {
         // No fault, return here
         return NO_FAULT;
     }
@@ -124,17 +133,17 @@ NCV7608::fault_condition_t NCV7608::ChannelOut::get_fault(void) {
      * Open load fault can only be detected when the channel is off
      * and the open load detection enable bit is set
      */
-    if(this->is_off() && this->open_load_diag_enabled()) {
+    if (this->is_off() && this->open_load_diag_enabled()) {
         return OPEN_LOAD;
     }
 
     /** Thermal fault is indicated globally, so check if that bit is set
      */
-    if(diag_bits & NCV7608_TW_BIT) {
+    if (diag_bits & NCV7608_TW_BIT) {
         return THERMAL_FAULT;
     }
 
-     /** Otherwise, it must be an over-current fault
+    /** Otherwise, it must be an over-current fault
      */
     return OVER_CURRENT;
 }
