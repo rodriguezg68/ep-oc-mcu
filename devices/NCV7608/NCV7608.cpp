@@ -89,12 +89,19 @@ NCV7608::ChannelOut NCV7608::channel(int num) {
 
 uint16_t NCV7608::batch_write(uint16_t new_state) {
 
+    // Lock the SPI mutex before asserting CS
+    _spi.lock();
+
     assert_cs();
 
     _cached_state = new_state;
     _cached_diag = _spi.write(_cached_state);
 
     deassert_cs();
+
+    // Unlock the SPI mutex
+    _spi.unlock();
+
     return _cached_diag;
 }
 
