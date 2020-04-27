@@ -41,8 +41,7 @@ public:
     typedef enum {
         NO_FAULT,           /** No fault condition */
         OPEN_LOAD,          /** Open load condition exists on channel */
-        OVER_LOAD,          /** Over-load condition exists on channel */
-        OVER_TEMPERATURE,   /** Over temperature fault */
+        OVER_LOAD,          /** Over-load/Over-temperature condition exists on channel */
     } fault_condition_t;
 
     /**

@@ -8,6 +8,7 @@
 #include "NCV7751.h"
 
 #include "mbed_assert.h"
+#include "mbed_wait_api.h"
 
 using namespace ep;
 
@@ -55,49 +56,65 @@ uint32_t NCV7751::write_state(uint16_t channel_bits, uint16_t ol_bits) {
 
     // Format the channel/ol bits to NCV7751 format
     uint16_t si_port1 = 0, si_port2 = 0;
-    for(int i = 0; i < 16; i++) {
+    for (int i = 0; i < 12; i++) {
 
         // Select the port this channel is controlled by
-        uint16_t* port = (i <= 7? &si_port1 : &si_port2);
+        uint16_t* port = (i <= 7 ? &si_port1 : &si_port2);
+
+        // Account for offset when switching ports
+        uint8_t base_shift = (i <= 7 ? i : (i % 8));
 
         /**
          * If the channel is set to on, ignore the ol bits
          * Open-load diagnostics are only enabled when channel is off
          */
-        if(_channel_bits & (1 << i)) {
+        if (_channel_bits & (1 << i)) {
             // Set the channel to ON mode (0b10)
-            port |= (1 << ((i << 1) + 1)); // 1 << ((i * 2) + 1)
-            port &= ~(1 << (i << 1));
-        } else if(_ol_bits & (1 << i)) {
+            *port |= (1 << ((base_shift << 1) + 1)); // 1 << ((i * 2) + 1)
+            *port &= ~(1 << (base_shift << 1));
+        } else if (_ol_bits & (1 << i)) {
             // Check if open-load diagnostics are enabled
             // If so, set channel to OFF mode (0b11)
-            port |= (0b11 << (i << 1)); // i * 2
+            *port |= (0b11 << (base_shift << 1)); // i * 2
         } else {
             // Neither channel nor ol diag are enabled
             // Set channel to STANDBY mode (0b00)
-            port &= ~(0b11 << (i << 1));
+            *port &= ~(0b11 << (base_shift << 1));
         }
 
     }
+
+    // Lock the SPI mutex before asserting CSB
+    _spi.lock();
+
+    /**
+     * Access Channels 9 thru 12
+     * CSB Mode = 0b01_T
+     */
+    _csb2 = 0;
+    _csb1 = 1;
+    // T = truncated (16-bit vs 24-bit), internal register setting
+    _cached_diag = (((_spi.write(si_port2)) & 0xFF00) << 8);
 
     /**
      * Access Channels 1 thru 8
      * CSB Mode = 0b10
      */
-    _csb1 = 1;
-    _csb2 = 0;
-    _cached_diag = (_spi.write(si_port1) & 0xFFFF);
-    /**
-     * Access Channels 9 thru 12
-     * CSB Mode = 0b01_T
-     */
     _csb2 = 1;
+
+    /**
+     * This delay was found to be necessary so the NCV7751
+     * could properly frame each 16-bit transfer
+     */
+    wait_us(10);
     _csb1 = 0;
-    // T = truncated (16-bit vs 24-bit), internal register setting
-    _cached_diag |= (((_spi.write(si_port2)) & 0xFF00) << 12);
+    _cached_diag |= (_spi.write(si_port1) & 0xFFFF);
 
     /** Deassert */
     _csb1 = 1;
+
+    // Unlock the SPI mutex
+    _spi.unlock();
 
     _mutex.unlock();
 
@@ -152,9 +169,17 @@ NCV7751::fault_condition_t NCV7751::ChannelOut::get_fault(void) {
     // Unlock the device mutex
     _parent._mutex.unlock();
 
-    // First see if there's a fault reported on this channel
-    return NO_FAULT;
+    // Check the over load or over temperature flag
+    if (diag_bits & (1 << (_num << 1))) {
+        return OVER_LOAD;
+    }
 
+    // Check the open load fault bit
+    if (diag_bits & (1 << ((_num << 1) + 1))) {
+        return OPEN_LOAD;
+    }
+
+    return NO_FAULT;
 }
 
 void NCV7751::ChannelOut::enable_open_load_diag(void) {
