@@ -1,28 +1,12 @@
-/**
- * ep-oc-mcu
- * Embedded Planet Open Core for Microcontrollers
+/*
+ * NCV7751.h
  *
- * Built with ARM Mbed-OS
- *
- * Copyright (c) 2019-2020 Embedded Planet, Inc.
- * SPDX-License-Identifier: Apache-2.0
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
+ *  Created on: Apr 24, 2020
+ *      Author: gdbeckstein
  */
 
-#ifndef EP_OC_MCU_DEVICES_NCV7608_NCV7608_H_
-#define EP_OC_MCU_DEVICES_NCV7608_NCV7608_H_
+#ifndef EP_OC_MCU_DEVICES_NCV7751_NCV7751_H_
+#define EP_OC_MCU_DEVICES_NCV7751_NCV7751_H_
 
 #include "drivers/SPI.h"
 #include "drivers/DigitalOut.h"
@@ -32,37 +16,32 @@
 namespace ep {
 
 /**
- * The NCV7608 is an automotive-grade, configurable,
- * octal low-side/high-side driver that can be controlled using a
- * 16-bit SPI bus.
+ * The NCV7751 is an automotive-grade 12-channel low-side output driver
+ * that can be controlled over SPI.
  *
- * The NCV7608 has built-in protection, including flyback diodes, ESD,
- * over-temperature, and over-current. Each failure mode can be diagnosed
- * through the SPI bus interface.
+ * The NCV7751 has built-in protection, including flyback diodes, ESD,
+ * over-current, over temperature, and open load detection. The cause of
+ * failure can be diagnosed through the SPI bus interface.
  *
- * The built-in protection features and configurable HS/LS outputs
- * make the NCV7608 ideal for driving resistive (eg: indicator lamps)
- * as well as inductive (eg: relays, small solenoids, DC motors, stepper motors)
- * loads. It is possible to configure the NCV7608 as an H-bridge driver
+ * The built-in protection features and large number of outputs
+ * make the NCV7751 ideal for driving resistive as well as inductive loads
+ * in an automotive setting while minimizing BOM complexity. It is especially
+ * useful in I/O-constrained applications.
  *
  */
-class NCV7608 {
+class NCV7751
+{
+
 
 public:
 
     /**
-     * Important notes on NCV7608 fault detection:
-     * - Open load faults can only be detected with the channel OFF
-     * - Thermal warning is a global bit, so if a channel activates the thermal
-     * warning bit while another channel is exhibiting a different fault, the
-     * latter channel will also be reported as having triggered the thermal fault
+     *
      */
     typedef enum {
         NO_FAULT,           /** No fault condition */
         OPEN_LOAD,          /** Open load condition exists on channel */
-        OVER_CURRENT,       /** Over-current condition exists on channel */
-        THERMAL_FAULT,      /** Thermal fault (includes thermal warning/shutdown) */
-        VS_POWER_FAIL,      /** Supply voltage power failure detected */
+        OVER_LOAD,          /** Over-load/Over-temperature condition exists on channel */
     } fault_condition_t;
 
     /**
@@ -74,13 +53,13 @@ public:
 
         /**
          * Construct a ChannelOut
-         * @param[in] ncv7608 Parent ncv7608 instance
-         * @param[in] num Channel number
+         * @param[in] ncv7751 Parent ncv7751 instance
+         * @param[in] num Channel number (1 through 12)
          *
          * @note the preferred method create a ChannelOut is
-         * to use ::channel on the given NCV7608 instance
+         * to use ::channel on the given NCV7751 instance
          */
-        ChannelOut(NCV7608& ncv7608, int num);
+        ChannelOut(NCV7751& ncv7751, int num);
 
         /** Set the output off or on, specified as 0 or 1 (int), respectively
          *
@@ -183,8 +162,8 @@ public:
         }
 
     protected:
-        NCV7608& _parent; /** Parent NCV7608 of this channel object */
-        int _num; /** Channel number of this object (1-8) */
+        NCV7751& _parent; /** Parent NCV7751 of this channel object */
+        int _num; /** Channel number of this object (1-12) */
 
     };
 
@@ -194,20 +173,21 @@ public:
     friend class ChannelOut;
 
     /**
-     * Instantiate an NCV7608 driver
+     * Instantiate an NCV7751 driver
      * @param[in] spi SPI bus instance to use for communication (16-bit format!)
-     * @param[in] csb Chip select "bar", defaults to NC (CS handled by SPI in this case)
+     * @param[in] csb1 Chip select "bar" 1
+     * @param[in] csb2 Chip select "bar" 2
      * @param[in] global_en Global enable pin, defaults to NC (unused)
      *
      * @note The SPI bus instance used must be configured for 16-bit format
      * to work properly!
      */
-    NCV7608(mbed::SPI& spi, PinName csb = NC, PinName global_en = NC);
+    NCV7751(mbed::SPI& spi, PinName csb1, PinName csb2, PinName global_en = NC);
 
     /**
      * Destructor
      */
-    ~NCV7608(void);
+    ~NCV7751(void);
 
     /**
      * Globally enable (if global_en != NC)
@@ -223,78 +203,75 @@ public:
      * Convenience function to create a ChannelOut object for a given
      * channel
      *
-     * @param[in] num Desired channel number. Allowed values: 1 thru 8
+     * @param[in] num Desired channel number. Allowed values: 1 thru 12
      * @retval channel Reference to channel
      */
     ChannelOut channel(int num);
 
     /**
-     * Batch writes channel settings to the NCV7608
+     * Batch writes channel settings to the NCV7751
      *
      * If your application requires closely-timed output transitions,
      * this function ensures the output states are updated in the same
      * SPI transaction.
      *
      * This is useful if, for example, you are using two outputs in
-     * parallel to achieve a higher current capacity or you are
-     * using multiple outputs in a motor control application.
+     * parallel to achieve a higher current capacity
      *
-     * @param[in] new_state Each desired channel state is represented by
-     * a bit in the MSB of this number. The bit corresponds to channel ((15 - bit_pos) + 1).
-     * (eg: bit 15 represents the desired state of channel 1, 1 = on, 0 = off)
-     * Each bit in the LSB of this number represents whether open-load diagnostics are
-     * desired on the given channel. 0 = not enabled, 1 = enabled.
-     * Defaults to disabled.
+     * @param[in] channel_bits Each desired channel state is represented by
+     * a bit in this number. The bit corresponds to channel (bit_pos) + 1.
+     * (eg: bit 0 represents the desired state of channel 1, 1 = on, 0 = off)
      *
-     * @retval diag_bits 16-bit output from NCV7608 representing the diagnostics
+     * @param[in] open_load_en Similar to channel bits, each bit in this
+     * number represents whether open-load diagnostics are desired on
+     * the given channel. 0 = not enabled, 1 = enabled. Defaults to disabled.
+     *
+     * @retval diag_bits 32-bit output from NCV7751 representing the diagnostics
      * state of each channel. If you are using the ChannelOut API there are
      * convenience functions to interpret this information for you.
-     *
-     * @note The open-load diagnostics only work with the channel off. Due
-     * to the way they work, enabling open-load diagnostics may sink enough
-     * current to dimly illuminate LED loads. This is why it defaults to off.
      */
-    uint16_t batch_write(uint16_t new_state);
-
-    /**
-     * Returns the cached channel state
-     */
-    uint16_t get_cached_state(void) {
-        return _cached_state;
-    }
+    uint32_t write_state(uint16_t channel_bits, uint16_t ol_bits = 0x0);
 
 protected:
 
     /**
-     * Asserts the chip select line, if separate from SPI instance
+     * Sync the cached state and diagnostic bits
+     * @retval diag_bits Sync'd diagnostic bits
      */
-    void assert_cs(void);
+    uint32_t sync(void);
 
     /**
-     * Deasserts the chip select line, if separate from SPI instance
+     * Returns the channel on/off bits
      */
-    void deassert_cs(void);
+    uint16_t get_channel_bits(void) {
+        return _channel_bits;
+    }
+
+    /**
+     * Returns the open-load enable/disable bits
+     */
+    uint16_t get_ol_bits(void) {
+        return _ol_bits;
+    }
 
     /**
      * Returns the cached diagnostics bits
      */
-    uint16_t get_cached_diag(void) {
+    uint32_t get_cached_diag(void) {
         return _cached_diag;
     }
-
-    /**
-     * Sync the cached state and diagnostic bits
-     */
-    uint16_t sync(void);
 
 protected:
 
     mbed::SPI& _spi;
-    mbed::DigitalOut* _cs;
+    mbed::DigitalOut _csb1;
+    mbed::DigitalOut _csb2;
     mbed::DigitalOut* _global_en;
 
-    uint16_t _cached_state; /** Cached channel on/off state bits */
-    uint16_t _cached_diag;  /** Cached diagnostics bits */
+    uint16_t _channel_bits; /** Channel on/off bits */
+    uint16_t _ol_bits;      /** Open-load enable/disable bits */
+
+    uint32_t _cached_diag;  /** Cached diagnostics bits */
 
     PlatformMutex _mutex;
 
@@ -302,4 +279,6 @@ protected:
 
 }
 
-#endif /* EP_OC_MCU_DEVICES_NCV7608_NCV7608_H_ */
+
+
+#endif /* EP_OC_MCU_DEVICES_NCV7751_NCV7751_H_ */
