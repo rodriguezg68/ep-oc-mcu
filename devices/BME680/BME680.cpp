@@ -24,7 +24,7 @@
 #include "BME680.h"
 #include <math.h>
 #include "platform/mbed_debug.h"
-#include "platform/mbed_wait_api.h"
+#include "rtos/ThisThread.h"
 
 static mbed::I2C* bme680_i2c;
 
@@ -358,5 +358,5 @@ int8_t BME680::i2c_write(uint8_t dev_id, uint8_t reg_addr, uint8_t *reg_data, ui
 
 void BME680::delay_msec(uint32_t ms) {
     debug(" * wait %d ms ... \r\n", ms);
-    wait_ms(ms);
+    rtos::ThisThread::sleep_for(std::chrono::milliseconds(ms));
 }
