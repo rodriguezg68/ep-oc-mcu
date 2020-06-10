@@ -1,4 +1,35 @@
-#include "mbed.h"
+/**
+ * ep-oc-mcu
+ * Embedded Planet Open Core for Microcontrollers
+ *
+ * Built with ARM Mbed-OS
+ *
+ * Copyright (c) 2019-2020 Embedded Planet, Inc.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Adapted from original source code from Daniel Wyatt:
+ * https://os.mbed.com/users/dewyatt/code/MCP23008//file/4f712bd739d0/MCP23008.hpp/
+ *
+ */
+
+/** TODO - add ways to get DigitalIn/Out(InOut) references from this class */
+
+#include "drivers/DigitalOut.h"
+#include "drivers/DigitalIn.h"
+#include "drivers/DigitalInOut.h"
+#include "drivers/I2C.h"
 
 /** MCP23008 class
  *
@@ -157,6 +188,6 @@ private:
 
     void reset ();
 
-    I2C i2c;
+    mbed::I2C i2c;
     uint8_t i2c_address;
 };
