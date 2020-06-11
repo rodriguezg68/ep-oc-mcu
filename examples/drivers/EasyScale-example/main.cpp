@@ -26,7 +26,7 @@
 
 #include "devices/EasyScale.h"
 
-#include "platform/mbed_wait_api.h"
+#include "rtos/ThisThread.h"
 
 #define EASYSCALE_CTRL_PIN P0_3
 
@@ -56,7 +56,7 @@ int main(void)
 			if(brightness == 0)
 				going_up = true;
 		}
-		wait_ms(250);
+                rtos::ThisThread::sleep_for(250ms);
 	}
 }
 

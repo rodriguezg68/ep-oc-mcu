@@ -49,7 +49,8 @@
 #include "VL53L0X_def.h"
 #include "VL53L0X_platform.h"
 #include "Stmpe1600.h"
-
+#include "mbed_wait_api.h"
+#include "rtos/ThisThread.h"
 
 /**
  * The device model ID
@@ -60,7 +61,7 @@
 #define STATUS_OK              0x00
 #define STATUS_FAIL            0x01
 
-#define VL53L0X_OsDelay(...) wait_ms(2) // 2 msec delay. can also use wait(float secs)/wait_us(int)
+#define VL53L0X_OsDelay(...) wait_us(2000) // 2 msec delay. can also use wait(float secs)/wait_us(int)
 
 #ifdef USE_EMPTY_STRING
 #define  VL53L0X_STRING_DEVICE_INFO_NAME                             ""
@@ -328,7 +329,8 @@ public:
     /* turns on the sensor */
     void VL53L0X_on(void)
     {
-        wait_ms(10);
+        
+        rtos::ThisThread::sleep_for(std::chrono::milliseconds(10));
     }
 
     /**
@@ -338,7 +340,7 @@ public:
     /* turns off the sensor */
     void VL53L0X_off(void)
     {
-        wait_ms(10);
+        rtos::ThisThread::sleep_for(std::chrono::milliseconds(10));
     }
 
     /**
