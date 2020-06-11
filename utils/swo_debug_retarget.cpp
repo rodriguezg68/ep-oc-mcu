@@ -21,10 +21,12 @@
  *
  */
 
+#if MBED_CONF_EP_UTILS_SWO_DEBUG_OUTPUT
+
+#if defined(DEVICE_ITM)
+
 #include "platform/mbed_retarget.h"
 #include "drivers/SerialWireOutput.h"
-
-#if MBED_CONF_EP_UTILS_SWO_DEBUG_OUTPUT
 
 /**
  * Retarget the Mbed stdio stream to SWO
@@ -35,6 +37,12 @@ mbed::FileHandle *mbed::mbed_target_override_console(int fd)
     return &swo;
 }
 
-#endif
+#else
+#warning This target does not support SWO output but ep-utils.swo-debug-output is enabled!
+
+#endif /** defined(DEVICE_ITM) */
+#endif /** MBED_CONF_EP_UTILS_SWO_DEBUG_OUTPUT */
+
+
 
 
