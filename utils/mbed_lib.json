@@ -1,0 +1,9 @@
+{
+    "name": "ep-utils",
+    "config": {
+        "swo-debug-output": {
+            "help": "Use SWO as default debug output channel",
+            "value": false
+        }
+    }
+}
