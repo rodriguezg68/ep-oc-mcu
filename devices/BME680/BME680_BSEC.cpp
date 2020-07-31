@@ -21,6 +21,8 @@
  *
  */
 
+#if defined(MBED_CONF_RTOS_PRESENT) // For baremetal builds
+
 #include "BME680_BSEC.h"
 #include "rtos/Mutex.h"
 #include "rtos/ThisThread.h"
@@ -446,3 +448,5 @@ void BME680_BSEC::set_iaq_accuracy(uint8_t new_iaq_accuracy)
 {
     iaq_accuracy = new_iaq_accuracy;
 }
+
+#endif //defined(MBED_CONF_RTOS_PRESENT)

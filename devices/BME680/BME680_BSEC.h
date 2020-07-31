@@ -24,6 +24,8 @@
 #ifndef BME680_H
 #define BME680_H
 
+#if defined(MBED_CONF_RTOS_PRESENT) // For baremetal builds
+
 #include "bme680_driver.h"
 #include "bsec_integration.h"
 #include "events/EventQueue.h"
@@ -117,5 +119,7 @@ private:
     BME680_BSEC(BME680_BSEC const&){};
     static BME680_BSEC* instance;
 };
+
+#endif // defined(MBED_CONF_RTOS_PRESENT)
 
 #endif
