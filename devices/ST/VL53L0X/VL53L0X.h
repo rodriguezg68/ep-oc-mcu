@@ -51,6 +51,7 @@
 #include "Stmpe1600.h"
 #include "mbed_wait_api.h"
 #include "rtos/ThisThread.h"
+#include "platform/mbed_version.h"
 
 /**
  * The device model ID
@@ -329,8 +330,11 @@ public:
     /* turns on the sensor */
     void VL53L0X_on(void)
     {
-        
+#if MBED_MAJOR_VERSION == 5
+        rtos::ThisThread::sleep_for(10);
+#else
         rtos::ThisThread::sleep_for(std::chrono::milliseconds(10));
+#endif
     }
 
     /**
@@ -340,7 +344,11 @@ public:
     /* turns off the sensor */
     void VL53L0X_off(void)
     {
+#if MBED_MAJOR_VERSION == 5
+        rtos::ThisThread::sleep_for(10);
+#else
         rtos::ThisThread::sleep_for(std::chrono::milliseconds(10));
+#endif
     }
 
     /**

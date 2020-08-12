@@ -22,8 +22,12 @@
  */
 
 #include "BME680.h"
-#include <math.h>
+
+#include <cmath>
+
 #include "platform/mbed_debug.h"
+#include "platform/mbed_version.h"
+
 #include "rtos/ThisThread.h"
 
 static mbed::I2C* bme680_i2c;
@@ -143,7 +147,7 @@ float BME680::getTemperature() {
 
     if (_tempEnabled) {
         temperature = data.temperature / 100.0;
-        debug("Temperature Raw Data %d \r\n", temperature);
+        debug("Temperature Raw Data %f \r\n", temperature);
     }
 
     return temperature;
@@ -158,7 +162,7 @@ float BME680::getHumidity() {
 
     if (_humEnabled) {
         humidity = data.humidity / 1000.0;
-        debug("Humidity Raw Data %d \r\n", humidity);
+        debug("Humidity Raw Data %f\r\n", humidity);
     }
 
     return humidity;
@@ -175,7 +179,7 @@ float BME680::getPressure() {
 
     if (_presEnabled) {
         pressure = data.pressure;
-        debug("Pressure Raw Data %d \r\n", pressure);
+        debug("Pressure Raw Data %f \r\n", pressure);
     }
 
     return pressure;
@@ -191,7 +195,7 @@ float BME680::getGasResistance() {
     if (_gasEnabled) {
         if (this->isGasHeatingSetupStable()) {
             gas_resistance = data.gas_resistance;
-            debug("Gas Resistance Raw Data %d \r\n", gas_resistance);
+            debug("Gas Resistance Raw Data %f \r\n", gas_resistance);
         } else {
             debug("Gas reading unstable \r\n");
         }
@@ -358,5 +362,9 @@ int8_t BME680::i2c_write(uint8_t dev_id, uint8_t reg_addr, uint8_t *reg_data, ui
 
 void BME680::delay_msec(uint32_t ms) {
     debug(" * wait %d ms ... \r\n", ms);
+#if MBED_MAJOR_VERSION == 5
+    rtos::ThisThread::sleep_for(ms);
+#else
     rtos::ThisThread::sleep_for(std::chrono::milliseconds(ms));
+#endif
 }
