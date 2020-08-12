@@ -24,8 +24,36 @@
 #ifndef EP_OC_MCU_DEVICES_RESISTORDIVIDER_RESISTORDIVIDER_H_
 #define EP_OC_MCU_DEVICES_RESISTORDIVIDER_RESISTORDIVIDER_H_
 
+#include "platform/mbed_version.h"
+
 /** The target must have an ADC to use this resistor divider class */
 #if DEVICE_ANALOGIN
+
+/**
+ * The adc reference voltage configuration was not introduced until 
+ * Mbed-OS 6, so we must retarget this macro to maintain compatibility
+ * with Mbed-OS 5.
+ *
+ * This setting sets the voltage used to scale an ADC reading
+ * Defaults to 3.3V
+ * May be reconfigured by adding a the following to your mbed_app.json:
+ * 
+ * "config": {
+ *  "default-adc-vref": {
+ *   "value": 5.0f
+ *  }
+ * }
+ *
+ */
+ #if MBED_MAJOR_VERSION == 5
+    #ifndef MBED_CONF_TARGET_DEFAULT_ADC_VREF
+        #ifndef MBED_CONF_APP_DEFAULT_ADC_VREF
+            #define MBED_CONF_TARGET_DEFAULT_ADC_VREF 3.3f
+        #else
+            #define MBED_CONF_TARGET_DEFAULT_ADC_VREF MBED_CONF_APP_DEFAULT_ADC_VREF 
+        #endif
+    #endif 
+ #endif
 
 #include "drivers/AnalogIn.h"
 
