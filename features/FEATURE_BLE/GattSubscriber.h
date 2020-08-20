@@ -147,7 +147,7 @@ namespace ep {
 			 * @param[in] retry_delay_ms (default: 2 seconds) Delay before retrying failed operations
 			 */
 			void discover_and_subscribe(mbed::Callback<void(result_t)> result_cb,
-					subscription_spec_t* spec, Gap::Handle_t* connection_handle,
+					subscription_spec_t* spec, ble::connection_handle_t* connection_handle,
 					unsigned int max_retries = 3, unsigned int timeout_ms = 5000,
 					unsigned int retry_delay_ms = 500);
 
@@ -161,7 +161,7 @@ namespace ep {
 			/** Resets the subscriber state machine to its initial state */
 			void reset(void);
 
-			Gap::Handle_t* get_connection_handle(void) {
+			ble::connection_handle_t* get_connection_handle(void) {
 				return _connection_handle;
 			}
 
@@ -192,7 +192,7 @@ namespace ep {
 
 			void service_discovered_cb(const DiscoveredService* service);
 
-			void discovery_termination_cb(Gap::Handle_t handle);
+			void discovery_termination_cb(ble::connection_handle_t handle);
 
 			void characteristic_discovered_cb(const DiscoveredCharacteristic* characteristic);
 
@@ -227,7 +227,7 @@ namespace ep {
 			subscription_spec_t* _spec;
 
 			/** Handle to peer connection */
-			Gap::Handle_t* _connection_handle;
+			ble::connection_handle_t* _connection_handle;
 
 			/** Maximum number of retries */
 			unsigned int _max_retries;
