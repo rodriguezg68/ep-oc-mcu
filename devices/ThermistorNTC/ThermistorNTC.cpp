@@ -33,16 +33,14 @@
 
 using namespace ep;
 
-ThermistorNTC::ThermistorNTC(ResistorDivider& r_div, float r_fixed,
-        ValueMapping* map, bool ntc_is_pull_up) : r_div(r_div),
-        r_to_t_map(map), beta_val(0.0f), r_fixed_ohms(r_fixed),
-        r_room_temp_ohms(0.0f), ntc_is_pull_up(ntc_is_pull_up) {
+ThermistorNTC::ThermistorNTC(ResistorDivider* r_div, ValueMapping* map, bool ntc_is_pull_up) : r_div(r_div),
+        r_to_t_map(map), beta_val(0.0f), r_room_temp_ohms(0.0f), ntc_is_pull_up(ntc_is_pull_up) {
 }
 
-ThermistorNTC::ThermistorNTC(ResistorDivider& r_div, float r_fixed, float beta,
+ThermistorNTC::ThermistorNTC(ResistorDivider* r_div, float beta,
         float r_room_temp, bool ntc_is_pull_up) : r_div(r_div),
-        r_to_t_map(NULL), beta_val(beta), r_fixed_ohms(r_fixed),
-        r_room_temp_ohms(r_room_temp), ntc_is_pull_up(ntc_is_pull_up) {
+        r_to_t_map(NULL), beta_val(beta), r_room_temp_ohms(r_room_temp),
+        ntc_is_pull_up(ntc_is_pull_up) {
 }
 
 float ThermistorNTC::get_temperature(void) {
@@ -50,9 +48,9 @@ float ThermistorNTC::get_temperature(void) {
     // Get the thermistor's resistance
     float r_thermistor;
     if(ntc_is_pull_up) {
-        r_thermistor = r_div.get_R_pu_ohms();
+        r_thermistor = r_div->get_R_pu_ohms();
     } else {
-        r_thermistor = r_div.get_R_pd_ohms();
+        r_thermistor = r_div->get_R_pd_ohms();
     }
 
     // If a table was given in the constructor, use the lookup table method

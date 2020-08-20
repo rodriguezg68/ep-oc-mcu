@@ -41,7 +41,7 @@ namespace ep
      * Class representing an NTC thermistor
      *
      * It allows you to read a relative temperature using a resistor divider consisting
-     * of a fixed resistor (R_fixed) and a thermistor that's resistance varies with temperature.
+     * of a fixed resistor (R_fixed) and a thermistor which has a resistance that varies with temperature.
      *
      * Example Circuit Diagram:
      *
@@ -70,8 +70,8 @@ namespace ep
      *                     -
      *
      * The NTC thermistor may be either the pull-down or pull-up resistor in the
-     * divider circuit. The API assumes it is the pull-up by default. See the constructor
-     * for more information.
+     * divider circuit. This API assumes the NTC is a pull-up resistor by default. See the
+     * constructor API documentation for more information.
      *
      * Typically R_fixed is selected to be equal to R_NTC @ room temperature (25.0C)
      *
@@ -82,10 +82,13 @@ namespace ep
      * Example:
      * @code
      * #include "ThermistorNTC.h"
-     * #include "mbed_wait_api.h"
+     * #include "rtos/ThisThread.h"
      * #include "ge1923.h"
+     * #include <chrono>
      *
      * #define NTC_ADC_PIN A0
+     *
+     * using namespace std::chrono;
      *
      * ep::ThermistorNTC ntc(NTC_ADC_PIN, 10000.0f, 3957.0f, 10000.0f);
      *
@@ -98,7 +101,7 @@ namespace ep
      * int main(void) {
      *     while(true) {
      *         printf("temperature: %.2fC\r\n", ntc.get_temperature());
-     *         wait_us(1000000);
+     *         rtos::ThisThread::sleep_for(1s);
      *     }
      * }
      * @endcode
@@ -112,7 +115,6 @@ namespace ep
          * table.
          *
          * @param[in] r_div ResistorDivider instance to use when measuring the thermistor's resistance
-         * @param[in] r_fixed Fixed resistance in voltage divider sense circuit (ohms)
          * @param[in] map ValueMapping object that provides the resistance (ohms) to temperature (C) table
          * @param[in] ntc_is_pull_up (optional) True if the NTC is the pull-up resistor in the divider circuit
          *
@@ -120,14 +122,13 @@ namespace ep
          * ValueMapping object to pass in
          *
          */
-        ThermistorNTC(ResistorDivider& r_div, float r_fixed, ValueMapping *map, bool ntc_is_pull_up = true);
+        ThermistorNTC(ResistorDivider* r_div, ValueMapping* map, bool ntc_is_pull_up = true);
 
         /**
          * Constructor for temperature conversion using a direct calculation
          * from a beta value given in the thermistor's datasheet.
          *
          * @param[in] r_div ResistorDivider instance to use when measuring the thermistor's resistance
-         * @param[in] r_fixed Fixed resistance in voltage divider sense circuit (ohms)
          * @param[in] beta Beta value for thermistor given by device's datasheet
          * @param[in] r_room_temp Nominal resistance of NTC thermistor (ohms) @ room temperature (25C)
          * @param[in] ntc_is_pull_up (optional) True if the NTC is the pull-up resistor in the divider circuit
@@ -137,7 +138,7 @@ namespace ep
          * easier to implement
          *
          */
-        ThermistorNTC(ResistorDivider& r_div, float r_fixed, float beta, float r_room_temp, bool ntc_is_pull_up = true);
+        ThermistorNTC(ResistorDivider* r_div, float beta, float r_room_temp, bool ntc_is_pull_up = true);
 
         virtual ~ThermistorNTC() { }
 
@@ -156,11 +157,10 @@ namespace ep
 
     protected:
 
-        ResistorDivider& r_div;     /** ResistorDivider used to measure the thermistor's resistance */
+        ResistorDivider* r_div;     /** ResistorDivider used to measure the thermistor's resistance */
 
-        ValueMapping *r_to_t_map;   /** ValueMapping for resistance to temperature, if given */
+        ValueMapping* r_to_t_map;   /** ValueMapping for resistance to temperature, if given */
         float beta_val;             /** Beta value for thermistor given by datasheet, if given */
-        float r_fixed_ohms;         /** Fixed resistance in voltage divider sense circuit in ohms */
         float r_room_temp_ohms;     /** Nominal temperature of thermistor at room temp in ohms, if given */
 
         bool ntc_is_pull_up;        /** True if NTC is the pull-up in the divider circuit, false if pull-down */

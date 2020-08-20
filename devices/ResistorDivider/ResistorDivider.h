@@ -36,7 +36,7 @@
  *
  * This setting sets the voltage used to scale an ADC reading
  * Defaults to 3.3V
- * May be reconfigured by adding a the following to your mbed_app.json:
+ * May be reconfigured by adding the following to your mbed_app.json:
  * 
  * "config": {
  *  "default-adc-vref": {
