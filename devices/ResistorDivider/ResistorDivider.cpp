@@ -27,7 +27,7 @@
 
 using namespace ep;
 
-ResistorDivider::ResistorDivider(mbed::AnalogIn& adc_in, float r_pd, float r_pu,
+ResistorDivider::ResistorDivider(mbed::AnalogIn* adc_in, float r_pd, float r_pu,
         float vin_volts) : adc_in(adc_in), r_pu(r_pu), r_pd(r_pd), vin_volts(vin_volts) {
 
     /** Exactly 2 of the given parameters must be > 0.0f (ie: they are known/fixed parameters) */
@@ -44,7 +44,7 @@ float ResistorDivider::get_R_pu_ohms(void) {
 #if MBED_MAJOR_VERSION == 5
         return (r_pd * ((vin_volts / (adc_in.read() * MBED_CONF_TARGET_DEFAULT_ADC_VREF))));
 #else
-        return (r_pd * ((vin_volts / adc_in.read_voltage()) - 1.0f));
+        return (r_pd * ((vin_volts / adc_in->read_voltage()) - 1.0f));
 #endif
     }
 }
@@ -58,7 +58,7 @@ float ResistorDivider::get_R_pd_ohms(void) {
 #if MBED_MAJOR_VERSION == 5
         return (r_pu * (1.0f / ((vin_volts / (adc_in.read() * MBED_CONF_TARGET_DEFAULT_ADC_VREF)) - 1.0f )));
 #else
-        return (r_pu * (1.0f / ((vin_volts / adc_in.read_voltage()) - 1.0f)));
+        return (r_pu * (1.0f / ((vin_volts / adc_in->read_voltage()) - 1.0f)));
 #endif
     }
 }
@@ -72,7 +72,7 @@ float ResistorDivider::get_Vin_volts(void) {
 #if MBED_MAJOR_VERSION == 5
         return (((r_pu + r_pd) / r_pd) * (adc_in.read() * MBED_CONF_TARGET_DEFAULT_ADC_VREF));
 #else
-        return (((r_pu + r_pd) / r_pd) * adc_in.read_voltage());
+        return (((r_pu + r_pd) / r_pd) * adc_in->read_voltage());
 #endif
     }
 }

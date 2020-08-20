@@ -116,7 +116,7 @@ namespace ep
          * will assert at runtime!
          *
          */
-        ResistorDivider(mbed::AnalogIn& adc_in, float r_pd,
+        ResistorDivider(mbed::AnalogIn* adc_in, float r_pd,
                 float r_pu = UnknownVal, float vin_volts = MBED_CONF_TARGET_DEFAULT_ADC_VREF);
 
         /**
@@ -145,7 +145,7 @@ namespace ep
 
     protected:
 
-        mbed::AnalogIn& adc_in; /** AnalogIn object used to take measurements of Vout with */
+        mbed::AnalogIn* adc_in; /** AnalogIn object used to take measurements of Vout with */
 
         float r_pu;         /** Given value of Rpu in the divider circuit (0.0f if unknown) */
         float r_pd;         /** Given value of Rpd in the divider circuit (0.0f if unknown) */
