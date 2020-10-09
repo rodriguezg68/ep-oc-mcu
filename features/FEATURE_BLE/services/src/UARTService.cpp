@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 
-// TODO - write to individual connections
-// TODO - blocking/non-blocking modes
-// TODO - read from individual connections
-
 #if BLE_FEATURE_GATT_SERVER
 
 #include "UARTService.h"
@@ -25,6 +21,10 @@
 #include "mbed_trace.h"
 
 #include "Kernel.h"
+
+#include <algorithm>
+
+#include "platform/mbed_assert.h"
 
 #define TRACE_GROUP "btuart"
 
@@ -55,11 +55,6 @@ const uint8_t  UARTServiceRXCharacteristicUUID[UUID::LENGTH_OF_LONG_UUID] = {
 };
 
 UARTService::UARTService():
-    connection_count(0),
-    send_countdown(0),
-    sending(false),
-    receiveBuffer(),
-    sendBuffer(),
     txCharacteristic(UARTServiceTXCharacteristicUUID, receiveBuffer, 1, BLE_UART_SERVICE_MAX_DATA_LEN,
                      GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_WRITE | GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_WRITE_WITHOUT_RESPONSE),
     rxCharacteristic(UARTServiceRXCharacteristicUUID, sendBuffer, 1, BLE_UART_SERVICE_MAX_DATA_LEN, GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY),
@@ -89,158 +84,266 @@ void UARTService::start(BLE &ble_interface)
     }
 }
 
-ssize_t UARTService::write(const void *_buffer, size_t length)
-{
-    mutex.lock();
-    ssize_t result = length;
-    const char *buffer = static_cast<const char*>(_buffer);
-    if (connection_count) {
-
-        TransceivedString* tx_string = new TransceivedString(buffer,
-                length);
-        tx_string->set_global(true);
-
-        /**
-         * If there was a problem inserting the message into the queue,
-         * make sure to cleanup the dynamically allocated string object
-         */
-        if (!txQueue.try_put_for(DURATION_ZERO, tx_string)) {
-            delete tx_string;
-            tr_warning("failed to insert string into tx queue, dropping data");
-            result = 0;
-        }
-
-        // Start processing the tx queue if not already
-        if(!sending) {
-            _write();
-        }
-
+void UARTService::onAttMtuChange(ble::connection_handle_t connectionHandle,
+        uint16_t attMtuSize) {
+    tr_debug("mtu changed to %u for connection handle %d", attMtuSize, connectionHandle);
+    BleSerial* ser = get_ble_serial_handle(connectionHandle);
+    if(ser) {
+        ser->set_mtu(attMtuSize);
     }
-    mutex.unlock();
-    return result;
-}
-
-ssize_t UARTService::read(void *buffer, size_t size)
-{
-    mutex.lock();
-
-    // TODO read
-
-    mutex.unlock();
-
-    return 0; // TODO read
-}
-
-void UARTService::sigio(mbed::Callback<void()> func)
-{
-    _sigio_cb = func;
 }
 
 void UARTService::onDataWritten(const GattWriteCallbackParams &params)
 {
-    mutex.lock();
     if(params.handle == txCharacteristic.getValueHandle()) {
-        // Allocate a string to store the incoming data
-        TransceivedString* rx_string = new TransceivedString((const char*)params.data, params.len,
-                params.connHandle);
-
-        /**
-         * If there was a problem inserting the message into the queue,
-         * make sure to cleanup the dynamically allocated string object
-         */
-        if(!rxQueue.try_put_for(DURATION_ZERO, rx_string)) {
-            delete rx_string;
-            tr_warning("failed to insert string into rx queue, dropping data");
-        } else {
-            if(_sigio_cb != nullptr) {
-                _sigio_cb();
-            }
+        BleSerial* ser = get_ble_serial_handle(params.connHandle);
+        if(ser) {
+            ser->on_data_written(mbed::make_const_Span(params.data, params.len));
         }
     }
-    mutex.unlock();
 }
 
 void UARTService::onDataSent(const GattDataSentCallbackParams &params)
 {
-    mutex.lock();
-
     if(params.attHandle == rxCharacteristic.getValueHandle()) {
-        tr_debug("rx characteristic data sent to connection handle %u", params.connHandle);
-
-        send_countdown--;
-        if(send_countdown == 0) {
-
-            if(_sigio_cb != nullptr) {
-                _sigio_cb();
-            }
-
-            // Process next packet in tx Queue
-            if(_write()) {
-               // If the queue is empty, unflag sending
-                sending = false;
-            }
-
+        BleSerial* ser = get_ble_serial_handle(params.connHandle);
+        if(ser) {
+            ser->on_data_sent();
         }
     }
-
-    mutex.unlock();
 }
 
 void UARTService::onUpdatesEnabled(
         const GattUpdatesEnabledCallbackParams &params) {
     if(params.attHandle == rxCCCDHandle) {
-        if(_updates_changed_cb) {
-            _updates_changed_cb(params.connHandle, true);
+        BleSerial* ser = get_ble_serial_handle(params.connHandle);
+        if(ser) {
+            ser->on_updates_enabled();
         }
-        tr_debug("updates enabled for ble uart on connection handle %u", params.connHandle);
     }
 }
 
 void UARTService::onUpdatesDisabled(
         const GattUpdatesDisabledCallbackParams &params) {
     if(params.attHandle == rxCCCDHandle) {
-        if(_updates_changed_cb) {
-            _updates_changed_cb(params.connHandle, false);
+        BleSerial* ser = get_ble_serial_handle(params.connHandle);
+        if(ser) {
+            ser->on_updates_disabled();
         }
-        tr_debug("updates disabled for ble uart on connection handle %u", params.connHandle);
-    }
-}
-
-bool UARTService::_write(void)
-{
-    // Delete the previous message we sent if there is one
-    delete next;
-    next = nullptr;
-
-    if(txQueue.try_get_for(DURATION_ZERO, &next)) {
-        if(next->is_global()) {
-            send_countdown = connection_count;
-            _server->write(rxCharacteristic.getValueHandle(),
-                    (const uint8_t*)next->get_string().c_str(),
-                    next->get_string().length());
-        } else {
-            send_countdown = 1;
-            _server->write(next->get_connection_handle(),
-                    rxCharacteristic.getValueHandle(),
-                    (const uint8_t*)next->get_string().c_str(),
-                    next->get_string().length());
-        }
-        return false;
-    } else {
-        return true;
     }
 }
 
 void UARTService::onConnectionComplete(
         const ble::ConnectionCompleteEvent& event) {
-    connection_count++;
-    tr_debug("connection count(+): %u", connection_count);
+    // Create a new BleSerial handle for this connection
+    BleSerial* ser = new BleSerial(*this, event.getConnectionHandle());
+    _serial_handles.emplace_front(ser);
+
+    tr_debug("serial handle (+): connection handle: %d", event.getConnectionHandle());
 }
 
 void UARTService::onDisconnectionComplete(
         const ble::DisconnectionCompleteEvent& event) {
-    connection_count--;
-    tr_debug("connection count(-): %u", connection_count);
+    // Remove the disconnected serial handle and delete it
+    BleSerial* ser = get_ble_serial_handle(event.getConnectionHandle());
+    _serial_handles.remove(ser);
+
+    delete ser;
+    ser = nullptr;
+
+    tr_debug("serial handle(-): connection handle: %d", event.getConnectionHandle());
+}
+
+UARTService::~UARTService() {
+    delete_all_serial_handles();
+}
+
+void UARTService::onShutdown(const GattServer &server) {
+    delete_all_serial_handles();
+}
+
+void UARTService::delete_all_serial_handles(void) {
+    auto it = _serial_handles.begin();
+    while(it != _serial_handles.end()) {
+        // Delete all allocated serial handles
+        delete *it;
+        *it = nullptr;
+        it++;
+    }
+
+    _serial_handles.clear();
+}
+
+UARTService::BleSerial* UARTService::get_ble_serial_handle(ble::connection_handle_t connection_handle) {
+
+    auto iter =  std::find_if(_serial_handles.begin(),
+            _serial_handles.end(),
+            [connection_handle](BleSerial* ser) {
+        return (ser->get_connection_handle() == connection_handle);
+    });
+
+    // Return nullptr if an associated BleSerial object wasn't found
+    return (iter == _serial_handles.end()? nullptr : *iter);
+}
+
+UARTService::BleSerial::BleSerial(
+        UARTService& service,
+        ble::connection_handle_t connection_handle) :
+                _service(service), _connection_handle(connection_handle),
+                _mtu(BLE_UART_SERVICE_DEFAULT_MTU_SIZE) { }
+
+UARTService::BleSerial::~BleSerial() {
+
+    /** Deallocate TX buffer upon disconnection (destructor is called upon disconnection) */
+    deallocate_tx_buffer();
+
+}
+
+ssize_t UARTService::BleSerial::write(const void *_buffer, size_t length)
+{
+    // Ignore if the client hasn't subscribed yet
+    if(_txbuf == nullptr) {
+        return 0;
+    }
+
+    mutex.lock();
+    const uint8_t *buffer = static_cast<const uint8_t*>(_buffer);
+
+    for(unsigned int i = 0; i < length; i++) {
+        _txbuf->push(buffer[i]);
+    }
+
+    if(!_sending_data) {
+        // Simulate a data sent event to start TX
+        on_data_sent();
+    }
+
+    mutex.unlock();
+    return length;
+}
+
+ssize_t UARTService::BleSerial::read(void *buffer, size_t size)
+{
+
+    size_t data_read = 0;
+
+    uint8_t *ptr = static_cast<uint8_t *>(buffer);
+
+    if (size == 0) {
+        return 0;
+    }
+
+    mutex.lock();
+
+    while(_rxbuf.empty()) {
+        if(!_blocking) {
+            return -EAGAIN;
+        }
+        mutex.unlock();
+        //thread_sleep_for(1);
+        mutex.lock();
+    }
+
+    while(data_read < size && !_rxbuf.empty()) {
+        _rxbuf.pop(*ptr++);
+        data_read++;
+    }
+
+    mutex.unlock();
+
+    return data_read;
+}
+
+void UARTService::BleSerial::on_updates_enabled(void) {
+
+    /** Allocate TX buffer now that someone is listening */
+    _txbuf = new mbed::CircularBuffer<uint8_t, MBED_CONF_BLE_UART_SERVICE_TX_RX_BUFFER_SIZE>();
+
+    /** Call application handler */
+    if(_updates_changed_cb) {
+        _updates_changed_cb(true);
+    }
+    tr_debug("updates enabled on connection handle %u", _connection_handle);
+}
+
+void UARTService::BleSerial::on_updates_disabled(void) {
+
+    /** Deallocate TX buffer */
+    deallocate_tx_buffer();
+
+    /* Call application handler */
+    if(_updates_changed_cb) {
+        _updates_changed_cb(false);
+    }
+    tr_debug("updates disabled on connection handle %u", _connection_handle);
+}
+
+void UARTService::BleSerial::on_data_sent(void) {
+    mutex.lock();
+
+    bool was_full = _txbuf->full();
+
+    // Delete the old gatt buffer and allocate a new one
+    delete[] _gatt_tx_buf;
+    _gatt_tx_buf = nullptr;
+
+    // Check if the tx buffer is empty
+    if(_txbuf->empty()) {
+        // We're done sending
+        _sending_data = false;
+        mutex.unlock();
+        return;
+    }
+
+    _gatt_tx_buf = new uint8_t[_mtu];
+
+    MBED_ASSERT(_gatt_tx_buf != nullptr);
+
+    int i = 0;
+    while((i < _mtu) && (!_txbuf->empty())) {
+        _txbuf->pop(_gatt_tx_buf[i++]);
+    }
+
+    // Transmit the buffer now
+    ble_error_t err = _service.write(this, mbed::make_Span(_gatt_tx_buf, i));
+
+    if(err) {
+        tr_error("writing to connection %d failed: %u", _connection_handle, err);
+    } else {
+        tr_info("wrote %d bytes to connection %d", i, _connection_handle);
+        _sending_data = true;
+        if(was_full && !_txbuf->full()) {
+            wake();
+        }
+    }
+
+    mutex.unlock();
+}
+
+void UARTService::BleSerial::on_data_written(mbed::Span<const uint8_t> data) {
+
+    mutex.lock();
+
+    bool was_empty = _rxbuf.empty();
+
+    for(int i = 0; i < data.size(); i++) {
+        _rxbuf.push(data[i]);
+    }
+
+    // Report that data is ready to be read from the buffer
+    if(was_empty && !_rxbuf.empty()) {
+        wake();
+    }
+
+    mutex.unlock();
+}
+
+ble_error_t UARTService::write(BleSerial *ser, mbed::Span<const uint8_t> data) {
+
+    return _server->write(ser->_connection_handle,
+            rxCharacteristic.getValueHandle(),
+            data.data(), data.size(), false);
+
 }
 
 #endif // BLE_FEATURE_GATT_SERVER
