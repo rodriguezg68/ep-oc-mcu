@@ -33,7 +33,7 @@
 
 #include <string>
 
-#include <forward_list>
+#include <array>
 
 #if BLE_FEATURE_GATT_SERVER
 
@@ -60,6 +60,21 @@ extern const uint8_t  UARTServiceRXCharacteristicUUID[UUID::LENGTH_OF_LONG_UUID]
 #define BLE_UART_SERVICE_MAX_DATA_LEN MBED_CONF_BLE_UART_SERVICE_BUFFER_SIZE
 #else
 #define BLE_UART_SERVICE_MAX_DATA_LEN (MBED_CONF_CORDIO_DESIRED_ATT_MTU - 3)
+#endif
+
+/**
+ * Maximum number of individual BLE serial connections
+ * This is usually equal to the maximum number of connections the BLE
+ * stack is configured to use.
+ *
+ * The application can adjust this to save memory.
+ */
+#ifndef MBED_CONF_BLE_UART_SERVICE_MAX_SERIALS
+#ifndef DM_CONN_MAX
+#define MBED_CONF_BLE_UART_SERVICE_MAX_SERIALS 3
+#else
+#define MBED_CONF_BLE_UART_SERVICE_MAX_SERIALS DM_CONN_MAX
+#endif
 #endif
 
 /**
@@ -102,9 +117,9 @@ public:
         BleSerial(UARTService& service,
                 ble::connection_handle_t connection_handle);
 
-        ~BleSerial();
-
     public:
+
+        ~BleSerial();
 
         ssize_t write(const void *_buffer, size_t length) override;
 
@@ -162,6 +177,10 @@ public:
             return _mtu;
         }
 
+        bool is_shutdown() const {
+            return _shutdown;
+        }
+
     protected:
 
         /** Handler for when updates are enabled by this connection */
@@ -206,14 +225,7 @@ public:
          *
          * This could be caused by a disconnection or BLE shutdown
          */
-        void start_shutdown(void);
-
-        /**
-         * Complete shutdown of this BleSerial
-         *
-         * @retval true if shutdown has been completed
-         */
-        bool complete_shutdown(void);
+        void shutdown(void);
 
     protected:
 
@@ -247,21 +259,8 @@ public:
         /** Actively writing from tx buffer flag */
         bool _sending_data = false;
 
-        /** Shutting down flag */
-        bool _shutting_down = false;
-
-        /**
-         * Being read by a thread
-         *
-         * If in blocking mode, a thread could be in a read loop
-         * during a disconnection. This flag defers release of resources
-         * to the accessing thread.
-         */
-        bool _being_read = false;
-
-        /** Same as above for blocking writes */
-        bool _being_written = false;
-
+        /** Shutdown flag */
+        bool _shutdown = false;
 
     };
 
@@ -305,18 +304,35 @@ public:
     void onDisconnectionComplete(const ble::DisconnectionCompleteEvent &event) override;
 
     /**
-     * Gets a BleSerial pointer given a connection handle.
+     * Gets a SharedPtr to a BleSerial with a given connection handle
      *
-     * @param[in] connection_handle Connection handle to get the associated BleSerial handle of
-     * @retval Pointer to associated BleSerial object, nullptr if not found
+     *      * @param[in] connection_handle Connection handle to get the associated BleSerial handle of
+     * @retval SharedPtr to associated BleSerial object, can be nullptr if not found
      */
-    BleSerial* get_ble_serial_handle(ble::connection_handle_t connection_handle);
+    mbed::SharedPtr<BleSerial> get_ble_serial_handle(ble::connection_handle_t connection_handle);
 
 protected:
 
     void shutdown_all_serial_handles(void);
 
     ble_error_t write(BleSerial* ser, mbed::Span<const uint8_t> data);
+
+    /**
+     * Returns the next available slot in the array of serial handles
+     * @retval pointer to a shared pointer if an empty slot is available, nullptr otherwise
+     */
+    mbed::SharedPtr<BleSerial>* get_next_available_slot(void);
+
+    /**
+     * Gets an internal SharedPtr given a connection handle.
+     *
+     * TODO is it necessary to pass by pointer internally? We want to access the same
+     * SharedPtr object that is in our list, not a copy of it...
+     *
+     * @param[in] connection_handle Connection handle to get the associated BleSerial handle of
+     * @retval Pointer to SharedPtr to associated BleSerial object, nullptr if not found
+     */
+    mbed::SharedPtr<BleSerial>* get_ble_serial_handle_internal(ble::connection_handle_t connection_handle);
 
 protected:
 
@@ -342,8 +358,8 @@ protected:
 
     GattServer* _server;
 
-    /** Linked list of serial handles for each connection */
-    std::forward_list<BleSerial*> _serial_handles;
+    /** Array of serial handles for each connection */
+    mbed::SharedPtr<BleSerial> _serial_handles[MBED_CONF_BLE_UART_SERVICE_MAX_SERIALS];
 
 };
 
