@@ -22,6 +22,7 @@
 #include "platform/CircularBuffer.h"
 #include "platform/NonCopyable.h"
 #include "platform/Span.h"
+#include "platform/SharedPtr.h"
 
 #include "ble/common/UUID.h"
 #include "ble/BLE.h"
@@ -200,6 +201,19 @@ public:
             _mtu = mtu;
         }
 
+        /**
+         * Shutdown this BleSerial
+         *
+         * This could be caused by a disconnection or BLE shutdown
+         */
+        void start_shutdown(void);
+
+        /**
+         * Complete shutdown of this BleSerial
+         *
+         * @retval true if shutdown has been completed
+         */
+        bool complete_shutdown(void);
 
     protected:
 
@@ -232,6 +246,22 @@ public:
 
         /** Actively writing from tx buffer flag */
         bool _sending_data = false;
+
+        /** Shutting down flag */
+        bool _shutting_down = false;
+
+        /**
+         * Being read by a thread
+         *
+         * If in blocking mode, a thread could be in a read loop
+         * during a disconnection. This flag defers release of resources
+         * to the accessing thread.
+         */
+        bool _being_read = false;
+
+        /** Same as above for blocking writes */
+        bool _being_written = false;
+
 
     };
 
@@ -284,7 +314,7 @@ public:
 
 protected:
 
-    void delete_all_serial_handles(void);
+    void shutdown_all_serial_handles(void);
 
     ble_error_t write(BleSerial* ser, mbed::Span<const uint8_t> data);
 
