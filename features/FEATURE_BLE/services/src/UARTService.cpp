@@ -15,12 +15,10 @@
  */
 
 /**
- * TODO - blocking/non-blocking implementations
- *
- * TODO - use smart pointers to return BleSerial handles?
- *      --> when BleSerial is shutdown, the pointer is forgotten
- *      by the UARTService, but threads using it may want to be able
- *      to check "is_shutdown" and then dispose of the pointer themselves
+ * TODO - test blocking/non-blocking implementations
+ * TODO - test MTU updates
+ * TODO - write test suite
+ * TODO - throughput test
  */
 
 #if BLE_FEATURE_GATT_SERVER
@@ -30,8 +28,6 @@
 #include "mbed_trace.h"
 
 #include "Kernel.h"
-
-#include <algorithm>
 
 #include "platform/mbed_assert.h"
 #include "platform/mbed_thread.h"
@@ -97,7 +93,7 @@ void UARTService::start(BLE &ble_interface)
 void UARTService::onAttMtuChange(ble::connection_handle_t connectionHandle,
         uint16_t attMtuSize) {
     tr_debug("mtu changed to %u for connection handle %d", attMtuSize, connectionHandle);
-    BleSerial* ser = get_ble_serial_handle(connectionHandle);
+    mbed::SharedPtr<BleSerial> ser = get_ble_serial_handle(connectionHandle);
     if(ser) {
         ser->set_mtu(attMtuSize);
     }
@@ -106,7 +102,7 @@ void UARTService::onAttMtuChange(ble::connection_handle_t connectionHandle,
 void UARTService::onDataWritten(const GattWriteCallbackParams &params)
 {
     if(params.handle == txCharacteristic.getValueHandle()) {
-        BleSerial* ser = get_ble_serial_handle(params.connHandle);
+        mbed::SharedPtr<BleSerial> ser = get_ble_serial_handle(params.connHandle);
         if(ser) {
             ser->on_data_written(mbed::make_const_Span(params.data, params.len));
         }
@@ -116,7 +112,7 @@ void UARTService::onDataWritten(const GattWriteCallbackParams &params)
 void UARTService::onDataSent(const GattDataSentCallbackParams &params)
 {
     if(params.attHandle == rxCharacteristic.getValueHandle()) {
-        BleSerial* ser = get_ble_serial_handle(params.connHandle);
+        mbed::SharedPtr<BleSerial> ser = get_ble_serial_handle(params.connHandle);
         if(ser) {
             ser->on_data_sent();
         }
@@ -126,7 +122,7 @@ void UARTService::onDataSent(const GattDataSentCallbackParams &params)
 void UARTService::onUpdatesEnabled(
         const GattUpdatesEnabledCallbackParams &params) {
     if(params.attHandle == rxCCCDHandle) {
-        BleSerial* ser = get_ble_serial_handle(params.connHandle);
+        mbed::SharedPtr<BleSerial> ser = get_ble_serial_handle(params.connHandle);
         if(ser) {
             ser->on_updates_enabled();
         }
@@ -136,7 +132,7 @@ void UARTService::onUpdatesEnabled(
 void UARTService::onUpdatesDisabled(
         const GattUpdatesDisabledCallbackParams &params) {
     if(params.attHandle == rxCCCDHandle) {
-        BleSerial* ser = get_ble_serial_handle(params.connHandle);
+        mbed::SharedPtr<BleSerial> ser = get_ble_serial_handle(params.connHandle);
         if(ser) {
             ser->on_updates_disabled();
         }
@@ -145,22 +141,32 @@ void UARTService::onUpdatesDisabled(
 
 void UARTService::onConnectionComplete(
         const ble::ConnectionCompleteEvent& event) {
-    // Create a new BleSerial handle for this connection
-    BleSerial* ser = new BleSerial(*this, event.getConnectionHandle());
-    _serial_handles.emplace_front(ser);
 
-    tr_debug("serial handle (+): connection handle: %d", event.getConnectionHandle());
+    mbed::SharedPtr<BleSerial> *slot = get_next_available_slot();
+    if(slot)
+    {
+        // Create a new BleSerial handle for this connection
+        *slot = new BleSerial(*this, event.getConnectionHandle());
+        tr_debug("serial handle (+): connection handle: %d", event.getConnectionHandle());
+
+    } else {
+        tr_warn("no serial slots available");
+    }
 }
 
 void UARTService::onDisconnectionComplete(
         const ble::DisconnectionCompleteEvent& event) {
-    // Remove the disconnected serial handle and delete it
-    BleSerial* ser = get_ble_serial_handle(event.getConnectionHandle());
-    _serial_handles.remove(ser);
 
-    ser->start_shutdown();
+    // Remove the disconnected serial handle
+    mbed::SharedPtr<BleSerial>* ser = get_ble_serial_handle_internal(
+            event.getConnectionHandle());
 
-    tr_debug("serial handle(-): connection handle: %d", event.getConnectionHandle());
+    if(ser) {
+        (*ser)->shutdown();
+        *ser = nullptr; // Forget the reference and let SharedPtr clean up
+
+        tr_debug("serial handle(-): connection handle: %d", event.getConnectionHandle());
+    }
 }
 
 UARTService::~UARTService() {
@@ -172,26 +178,52 @@ void UARTService::onShutdown(const GattServer &server) {
 }
 
 void UARTService::shutdown_all_serial_handles(void) {
-    auto it = _serial_handles.begin();
-    while(it != _serial_handles.end()) {
-        // Shutdown the serial connection
-        (*it)->start_shutdown();
-        it++;
-    }
 
-    _serial_handles.clear();
+    for(int i = 0; i < MBED_CONF_BLE_UART_SERVICE_MAX_SERIALS; i++) {
+        auto handle = _serial_handles[i];
+        if(handle) {
+            handle->shutdown();
+            handle = nullptr;
+        }
+    }
 }
 
-UARTService::BleSerial* UARTService::get_ble_serial_handle(ble::connection_handle_t connection_handle) {
+mbed::SharedPtr<UARTService::BleSerial> UARTService::get_ble_serial_handle(
+        ble::connection_handle_t connection_handle) {
+    return *(get_ble_serial_handle_internal(connection_handle));
+}
 
-    auto iter =  std::find_if(_serial_handles.begin(),
-            _serial_handles.end(),
-            [connection_handle](BleSerial* ser) {
-        return (ser->get_connection_handle() == connection_handle);
-    });
+mbed::SharedPtr<UARTService::BleSerial>* UARTService::get_ble_serial_handle_internal(
+        ble::connection_handle_t connection_handle) {
+
+    for(int i = 0; i < MBED_CONF_BLE_UART_SERVICE_MAX_SERIALS; i++) {
+        if(_serial_handles[i]->get_connection_handle() == connection_handle) {
+            return &_serial_handles[i];
+        }
+    }
 
     // Return nullptr if an associated BleSerial object wasn't found
-    return (iter == _serial_handles.end()? nullptr : *iter);
+    return nullptr;
+}
+
+mbed::SharedPtr<UARTService::BleSerial>* UARTService::get_next_available_slot(void) {
+
+    for(int i = 0; i < MBED_CONF_BLE_UART_SERVICE_MAX_SERIALS; i++) {
+        if(!_serial_handles[i]) {
+            return &_serial_handles[i];
+        }
+    }
+
+    // Return nullptr if a free slot wasn't found
+    return nullptr;
+}
+
+ble_error_t UARTService::write(BleSerial *ser, mbed::Span<const uint8_t> data) {
+
+    return _server->write(ser->_connection_handle,
+            rxCharacteristic.getValueHandle(),
+            data.data(), data.size(), false);
+
 }
 
 UARTService::BleSerial::BleSerial(
@@ -210,6 +242,11 @@ UARTService::BleSerial::~BleSerial() {
 
 ssize_t UARTService::BleSerial::write(const void *_buffer, size_t length)
 {
+    // Ignore if the BleSerial is shutdown
+    if(_shutdown) {
+        return -ESHUTDOWN;
+    }
+
     // Ignore if the client hasn't subscribed yet
     if(_txbuf == nullptr) {
         return -EAGAIN;
@@ -219,7 +256,6 @@ ssize_t UARTService::BleSerial::write(const void *_buffer, size_t length)
     size_t data_written = 0;
 
     mutex.lock();
-    _being_written = true;
     while(data_written < length) {
 
         if(_txbuf->full()) {
@@ -227,9 +263,7 @@ ssize_t UARTService::BleSerial::write(const void *_buffer, size_t length)
                 break;
             }
             do {
-                if(_shutting_down) {
-                    _being_written = false;
-                    complete_shutdown();
+                if(_shutdown) {
                     mutex.unlock();
                     return -ESHUTDOWN;
                 }
@@ -256,9 +290,7 @@ ssize_t UARTService::BleSerial::write(const void *_buffer, size_t length)
                 break;
             }
 
-            if(_shutting_down) {
-                _being_written = false;
-                complete_shutdown();
+            if(_shutdown) {
                 mutex.unlock();
                 return -ESHUTDOWN;
             }
@@ -269,8 +301,6 @@ ssize_t UARTService::BleSerial::write(const void *_buffer, size_t length)
 
     }
 
-    _being_written = false;
-
     mutex.unlock();
 
     return data_written != 0 ? (ssize_t) data_written : (ssize_t) - EAGAIN;
@@ -279,6 +309,10 @@ ssize_t UARTService::BleSerial::write(const void *_buffer, size_t length)
 
 ssize_t UARTService::BleSerial::read(void *buffer, size_t size)
 {
+    // Ignore if the BleSerial is shutdown
+    if(_shutdown) {
+        return -ESHUTDOWN;
+    }
 
     size_t data_read = 0;
 
@@ -289,16 +323,13 @@ ssize_t UARTService::BleSerial::read(void *buffer, size_t size)
     }
 
     mutex.lock();
-    _being_read = true;
     while(_rxbuf.empty()) {
         if(!_blocking) {
-            _being_read = false;
+            mutex.unlock();
             return -EAGAIN;
         }
 
-        if(_shutting_down) {
-            _being_read = false;
-            complete_shutdown();
+        if(_shutdown) {
             mutex.unlock();
             return -ESHUTDOWN;
         }
@@ -313,7 +344,6 @@ ssize_t UARTService::BleSerial::read(void *buffer, size_t size)
         data_read++;
     }
 
-    _being_read = false;
     mutex.unlock();
 
     return data_read;
@@ -344,6 +374,7 @@ void UARTService::BleSerial::on_updates_disabled(void) {
 }
 
 void UARTService::BleSerial::on_data_sent(void) {
+
     mutex.lock();
 
     bool was_full = _txbuf->full();
@@ -352,8 +383,8 @@ void UARTService::BleSerial::on_data_sent(void) {
     delete[] _gatt_tx_buf;
     _gatt_tx_buf = nullptr;
 
-    // Check if the tx buffer is empty
-    if(_txbuf->empty()) {
+    // Check if the tx buffer is empty or if we're shutdown
+    if(_txbuf->empty() || _shutdown) {
         // We're done sending
         _sending_data = false;
         mutex.unlock();
@@ -374,6 +405,7 @@ void UARTService::BleSerial::on_data_sent(void) {
 
     if(err) {
         tr_error("writing to connection %d failed: %u", _connection_handle, err);
+        // TODO do we need to set _sending_data to false here?
     } else {
         tr_info("wrote %d bytes to connection %d", i, _connection_handle);
         _sending_data = true;
@@ -403,29 +435,9 @@ void UARTService::BleSerial::on_data_written(mbed::Span<const uint8_t> data) {
     mutex.unlock();
 }
 
-ble_error_t UARTService::write(BleSerial *ser, mbed::Span<const uint8_t> data) {
-
-    return _server->write(ser->_connection_handle,
-            rxCharacteristic.getValueHandle(),
-            data.data(), data.size(), false);
-
-}
-
-void UARTService::BleSerial::start_shutdown(void) {
-    _shutting_down = true;
-    // Attempt to complete shutdown now
-    complete_shutdown();
-}
-
-bool UARTService::BleSerial::complete_shutdown(void) {
-    // Check to make sure a thread isn't reading or writing to the BleSerial
-    if(!_being_read && !_being_written) {
-        // We can now delete this object
-        delete this;
-        return true;
-    } else {
-        return false;
-    }
+void UARTService::BleSerial::shutdown(void) {
+    // TODO need mutex here?
+    _shutdown = true;
 }
 
 #endif // BLE_FEATURE_GATT_SERVER
