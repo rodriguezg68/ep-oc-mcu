@@ -28,6 +28,11 @@ OneEdgeService::OneEdgeService()
 {
     dev = CellularDevice::get_target_default_instance();
     at_handler = dev->get_at_handler();
+
+    at_handler->set_urc_handler("LWM2M-TLT:", mbed::Callback<void()>(this, &OneEdgeService::urc_lwm2m_tlt));
+    at_handler->set_urc_handler("#LWM2MRING:", mbed::Callback<void()>(this, &OneEdgeService::urc_lwm2mring));
+    at_handler->set_urc_handler("#LWM2MEND:", mbed::Callback<void()>(this, &OneEdgeService::urc_lwm2mend));
+    at_handler->set_urc_handler("#LWM2MINFO:", mbed::Callback<void()>(this, &OneEdgeService::urc_lwm2minfo));
 }
 
 void OneEdgeService::init()
@@ -79,11 +84,11 @@ nsapi_error_t OneEdgeService::activate_ipeasy_context(int context_id)
     return at_handler->unlock_return_error();
 }
 
-nsapi_error_t OneEdgeService::lwm2m_client_enable()
+nsapi_error_t OneEdgeService::lwm2m_client_enable(int context, AckModaliy mode)
 {
     at_handler->lock();
 
-    at_handler->at_cmd_discard("#LWM2MENA", "=", "%d", 1);
+    at_handler->at_cmd_discard("#LWM2MENA", "=", "%d%d%d", ONEEDGE_CLIENT_ENABLED, context, mode);
 
     return at_handler->unlock_return_error();
 }
@@ -200,4 +205,75 @@ bool OneEdgeService::lwm2m_client_create_temperature_object_instance(int instanc
     at_handler->at_cmd_discard("#LWM2MNEWINST", "=", "%d%d%d", 0, 3303, instance);
 
     return at_handler->unlock_return_error() == NSAPI_ERROR_OK;
+}
+
+nsapi_error_t OneEdgeService::lwm2m_client_send_ack(int action)
+{
+    at_handler->lock();
+
+    at_handler->at_cmd_discard("#LWM2MACK", "=", "%d", action);
+
+    return at_handler->unlock_return_error();
+}
+
+void OneEdgeService::urc_lwm2m_tlt()
+{
+    char current_state[ONEEDGE_CLIENT_STATE_MAX_LENGTH];
+
+    at_handler->lock();
+    const ssize_t current_state_length = at_handler->read_string(current_state, ONEEDGE_CLIENT_STATE_MAX_LENGTH);
+    at_handler->skip_param();
+    at_handler->skip_param();
+    const nsapi_error_t err = at_handler->unlock_return_error();
+
+    tr_debug("Found LWM2M-TLT URC, new state: %s", current_state);
+
+    if (err != NSAPI_ERROR_OK) {
+        return;
+    }
+}
+
+void OneEdgeService::urc_lwm2mring()
+{
+    char current_ring_state[ONEEDGE_CLIENT_STATE_MAX_LENGTH];
+
+    at_handler->lock();
+    const ssize_t current_state_length = at_handler->read_string(current_ring_state, ONEEDGE_CLIENT_STATE_MAX_LENGTH);
+    const nsapi_error_t err = at_handler->unlock_return_error();
+
+    tr_debug("Found #LWM2MRING URC, new state: %s", current_ring_state);
+
+    if (err != NSAPI_ERROR_OK) {
+        return;
+    }
+}
+
+void OneEdgeService::urc_lwm2mend()
+{
+    at_handler->lock();
+    const int end_result_code = at_handler->read_int();
+    const nsapi_error_t err = at_handler->unlock_return_error();
+
+    tr_debug("Found #LWM2MEND URC, end result code: %d", end_result_code);
+
+    if (err != NSAPI_ERROR_OK) {
+        return;
+    }
+}
+
+void OneEdgeService::urc_lwm2minfo()
+{
+    char info_type[ONEEDGE_CLIENT_STATE_MAX_LENGTH];
+    char info_event[ONEEDGE_CLIENT_STATE_MAX_LENGTH];
+
+    at_handler->lock();
+    const ssize_t info_type_length = at_handler->read_string(info_type, ONEEDGE_CLIENT_STATE_MAX_LENGTH);
+    const ssize_t info_event_length = at_handler->read_string(info_event, ONEEDGE_CLIENT_STATE_MAX_LENGTH);
+    const nsapi_error_t err = at_handler->unlock_return_error();
+
+    tr_debug("Found #LWM2MINFO URC, info type: %s, info event: %s", info_type, info_event);
+
+    if (err != NSAPI_ERROR_OK) {
+        return;
+    }
 }

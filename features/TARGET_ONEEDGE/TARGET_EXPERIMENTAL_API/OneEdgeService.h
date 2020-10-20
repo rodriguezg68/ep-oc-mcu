@@ -42,9 +42,18 @@
 #define CTRL_Z  "\x1a"
 #define ESC     "\x1b"
 #define ONEEDGE_CLIENT_ENABLED 1
+#define ONEEDGE_CLIENT_STATE_MAX_LENGTH 20
 
 class OneEdgeService {
 public:
+
+    /**
+     * OneEdge LWM2M client ACK modality
+     */
+    enum AckModaliy {
+        AckModalityAckNotRequired = 0,
+        AckModalityAckRequired = 1
+    };
 
     /** 
      * Default constructor
@@ -61,7 +70,7 @@ public:
      * 
      *  @return         NSAPI_ERROR_OK on success, otherwise modem may be need power cycling
      */
-    nsapi_error_t lwm2m_client_enable();
+    nsapi_error_t lwm2m_client_enable(int context = 1, AckModaliy mode = AckModalityAckNotRequired);
 
     /** 
      * Retrieves the state of the Telit OneEdge LWM2M client
@@ -69,6 +78,16 @@ public:
      *  @return         True if the Telit OneEdge LWM2M client is enabled
      */
     bool lwm2m_client_is_enabled();
+
+    /** 
+     * Triggers the Telit OneEdge LWM2M client to send an ACK to the server
+     * 
+     *  @param action   Acknowledge: the <cid> context indicated in
+     *                  #LWM2MENA command is active and the user allows the client
+     *                  to send data through this.
+     *  @return         NSAPI_ERROR_OK on success, otherwise modem may be need power cycling
+     */
+    nsapi_error_t lwm2m_client_send_ack(int action = 1);
 
     /** 
      * Sets the current value of the battery level resource via the Telit OneEdge LWM2M client
@@ -224,6 +243,26 @@ protected:
         };
         return object_3303;
     };
+
+    /**
+     * LWM2M-TLT URC handler
+     */
+    void urc_lwm2m_tlt();
+
+    /**
+     * LWM2MRING URC handler
+     */
+    void urc_lwm2mring();
+
+    /**
+     * LWM2MEND URC handler
+     */
+    void urc_lwm2mend();
+
+    /**
+     * LWM2MINFO URC handler
+     */
+    void urc_lwm2minfo();
     
     CellularDevice *dev;
     ATHandler *at_handler;
