@@ -88,6 +88,23 @@ nsapi_error_t OneEdgeService::lwm2m_client_enable()
     return at_handler->unlock_return_error();
 }
 
+bool OneEdgeService::lwm2m_client_is_enabled()
+{
+    int client_state = 0;
+
+    at_handler->lock();
+
+    at_handler->at_cmd_int("#LWM2MENA", "?", client_state);
+
+    nsapi_error_t err = at_handler->unlock_return_error();
+
+    if (err != NSAPI_ERROR_OK) {
+        return false;
+    }
+
+    return client_state == ONEEDGE_CLIENT_ENABLED;
+}
+
 nsapi_error_t OneEdgeService::lwm2m_client_set_battery_level(int battery_level)
 {
     at_handler->lock();

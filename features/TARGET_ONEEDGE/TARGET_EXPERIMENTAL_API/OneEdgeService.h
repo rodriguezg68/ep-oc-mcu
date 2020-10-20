@@ -41,6 +41,7 @@
 #define ME310_MAX_FULL_FILE_PATH_LENGTH 128
 #define CTRL_Z  "\x1a"
 #define ESC     "\x1b"
+#define ONEEDGE_CLIENT_ENABLED 1
 
 class OneEdgeService {
 public:
@@ -61,6 +62,13 @@ public:
      *  @return         NSAPI_ERROR_OK on success, otherwise modem may be need power cycling
      */
     nsapi_error_t lwm2m_client_enable();
+
+    /** 
+     * Retrieves the state of the Telit OneEdge LWM2M client
+     * 
+     *  @return         True if the Telit OneEdge LWM2M client is enabled
+     */
+    bool lwm2m_client_is_enabled();
 
     /** 
      * Sets the current value of the battery level resource via the Telit OneEdge LWM2M client
