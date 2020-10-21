@@ -43,6 +43,7 @@
 #define ESC     "\x1b"
 #define ONEEDGE_CLIENT_ENABLED 1
 #define ONEEDGE_CLIENT_STATE_MAX_LENGTH 20
+#define ONEEDGE_CLIENT_URL_MAX_LENGTH 50
 
 class OneEdgeService {
 public:
@@ -53,6 +54,66 @@ public:
     enum AckModaliy {
         AckModalityAckNotRequired = 0,
         AckModalityAckRequired = 1
+    };
+
+    /**
+     * OneEdge LWM2M client ring event
+     */
+    enum ClientRingEvent {
+        RegisterEvent,      // The client needs to register
+        UpdateEvent,        // Registration update to be sent
+        NotificationEvent,  // A value under observation has changed and it should be notified to the server
+        SMSWakeUpEvent,     // Wake up SMS received from the server
+        DeregistrationEvent // Deregistration
+    };
+
+    /**
+     * OneEdge LWM2M client info event
+     */
+    enum ClientInfoEvent {
+        FotaRebootEvent,    // A reboot occurring during FW upgrade
+        DeviceRebootEvent   // A reboot issued by LwM2M server. Case: EXEC 3/0/4 and EXEC 3/0/5.
+    };
+
+    /**
+     * OneEdge LWM2M client server registration event
+     */
+    enum ClientServerRegistrationEvent {
+        BootstrappingEvent,     // The client is starting the bootstrap to the specified server
+        BootstrappedEvent,      // The client finished successfully the bootstrap to the specified server
+        RegisteringEvent,       // The client is starting the DM connection to the specified server
+        RegisteredEvent,        // The client finished successfully the DM connection to the specified server
+        SuspendedEvent,         // The client suspended successfully the DM connection to the specified server, as requested via /1/x/4 execution resource
+        ClientDisabledEvent,    // The client has been disabled by AT command or by internal failures (i.e.: handshake failure)
+        ForceExitEvent          // The client failed the server connection and after the proper retries, it is stopped. This action is only manageable by a module reboot.
+    };
+
+    /**
+     * OneEdge LWM2M client enabling status
+     */
+    enum ClientEnablingStatus {
+        ClientDisabled = 0, // The client is disabled
+        ClientEnabled = 1   // The client is enabled
+    };
+
+    /**
+     * OneEdge LWM2M client internal status
+     */
+    enum ClientInternalStatus {
+        Disabled,       // The client is disabled
+        Waiting,        // Waiting for the user's ACK
+        Active,         // After the ACK, the session is currently active
+        Idle,           // There is not an active session currently
+        Deregistering,  // The client is deregistering
+        Unknown         // Current status unknown
+    };
+
+    /**
+     * OneEdge LWM2M client status
+     */
+    struct ClientStatus {
+        ClientEnablingStatus enabled_status;
+        ClientInternalStatus internal_status;
     };
 
     /** 
@@ -68,16 +129,19 @@ public:
     /** 
      * Enables the Telit OneEdge LWM2M client
      * 
-     *  @return         NSAPI_ERROR_OK on success, otherwise modem may be need power cycling
+     *  @param desired_state    The desired state for the client (enabled/dsiabled)
+     *  @param context          The desired PDP context for the client to use
+     *  @param mode             The desired ACK modality (ACK or no ACK)
+     *  @return                 NSAPI_ERROR_OK on success, otherwise modem may be need power cycling
      */
-    nsapi_error_t lwm2m_client_enable(int context = 1, AckModaliy mode = AckModalityAckNotRequired);
+    nsapi_error_t lwm2m_client_enable(ClientEnablingStatus desired_state = ClientEnabled, int context = 1, AckModaliy mode = AckModalityAckNotRequired);
 
     /** 
      * Retrieves the state of the Telit OneEdge LWM2M client
      * 
-     *  @return         True if the Telit OneEdge LWM2M client is enabled
+     *  @return The current state of the LWM2M client
      */
-    bool lwm2m_client_is_enabled();
+    ClientStatus lwm2m_client_get_status();
 
     /** 
      * Triggers the Telit OneEdge LWM2M client to send an ACK to the server
@@ -110,7 +174,43 @@ public:
      *  @param instance target temperature object instance
      *  @return         true on success or if the target temperature object instance already exists
      */
-    bool lwm2m_client_create_temperature_object_instance(int instance);
+    bool lwm2m_client_create_temperature_object_instance(int instance = 0);
+
+    /**
+     * Sets the callback which is fired when a LWM2MRING event occurs
+     * 
+     * @param ring_callback The callback which is fired
+     */
+    void lwm2m_client_set_ring_callback(Callback<void(ClientRingEvent)> ring_callback) {
+        _ring_callback = ring_callback;
+    }
+
+    /**
+     * Sets the callback which is fired when a LWM2MINFO event occurs
+     * 
+     * @param info_callback The callback which is fired
+     */
+    void lwm2m_client_set_info_callback(Callback<void(ClientInfoEvent)> info_callback) {
+        _info_callback = info_callback;
+    }
+
+    /**
+     * Sets the callback which is fired when a LWM2M-TLT event occurs
+     * 
+     * @param server_registration_callback  The callback which is fired
+     */
+    void lwm2m_client_set_server_registration_callback(Callback<void(ClientServerRegistrationEvent, int, const char *)> server_registration_callback) {
+        _server_registration_callback = server_registration_callback;
+    }
+
+    /**
+     * Sets the callback which is fired when a LWM2MEND event occurs
+     * 
+     * @param end_callback  The callback which is fired
+     */
+    void lwm2m_client_set_end_callback(Callback<void(int)> end_callback) {
+        _end_callback = end_callback;
+    }
 
 protected:
 
@@ -266,6 +366,10 @@ protected:
     
     CellularDevice *dev;
     ATHandler *at_handler;
+    Callback<void(ClientRingEvent)> _ring_callback;
+    Callback<void(ClientInfoEvent)> _info_callback;
+    Callback<void(ClientServerRegistrationEvent, int, const char *)> _server_registration_callback;
+    Callback<void(int)> _end_callback;
 };
 
 #endif // ONE_EDGE_SERVICE

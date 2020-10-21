@@ -84,30 +84,74 @@ nsapi_error_t OneEdgeService::activate_ipeasy_context(int context_id)
     return at_handler->unlock_return_error();
 }
 
-nsapi_error_t OneEdgeService::lwm2m_client_enable(int context, AckModaliy mode)
+nsapi_error_t OneEdgeService::lwm2m_client_enable(OneEdgeService::ClientEnablingStatus desired_state, int context, AckModaliy mode)
 {
     at_handler->lock();
 
-    at_handler->at_cmd_discard("#LWM2MENA", "=", "%d%d%d", ONEEDGE_CLIENT_ENABLED, context, mode);
+    if (desired_state == ClientEnabled) {
+        at_handler->at_cmd_discard("#LWM2MENA", "=", "%d%d%d", 1, context, mode);
+    } else {
+        at_handler->at_cmd_discard("#LWM2MENA", "=", "%d", 0);
+    }
 
     return at_handler->unlock_return_error();
 }
 
-bool OneEdgeService::lwm2m_client_is_enabled()
+OneEdgeService::ClientStatus OneEdgeService::lwm2m_client_get_status()
 {
-    int client_state = 0;
+    ClientStatus current_status {
+        .enabled_status = ClientDisabled,
+        .internal_status = Unknown
+    };
 
     at_handler->lock();
 
-    at_handler->at_cmd_int("#LWM2MENA", "?", client_state);
+    at_handler->cmd_start_stop("#LWM2MSTAT", "");
+    at_handler->resp_start("#LWM2MGETSTAT:");
 
-    nsapi_error_t err = at_handler->unlock_return_error();
+    int current_enabled_status = -1;
+    char current_internal_status[ONEEDGE_CLIENT_STATE_MAX_LENGTH];
 
-    if (err != NSAPI_ERROR_OK) {
-        return false;
+    current_enabled_status = at_handler->read_int();
+    at_handler->read_string(current_internal_status, sizeof(current_internal_status));
+
+    at_handler->resp_stop();
+    at_handler->unlock();
+
+    // Populate client status struct
+    switch (current_enabled_status) {
+        default:
+        case 0:
+            current_status.enabled_status = ClientDisabled;
+            tr_debug("LWM2M client enabling status: Disabled");
+            break;
+        case 1:
+            current_status.enabled_status = ClientEnabled;
+            tr_debug("LWM2M client enabling status: Enabled");
+            break;
     }
 
-    return client_state == ONEEDGE_CLIENT_ENABLED;
+    if (strstr(current_internal_status, "DIS") != NULL) {
+        current_status.internal_status = Disabled;
+        tr_debug("LWM2M client internal status: Disabled");
+    } else if (strstr(current_internal_status, "WAIT") != NULL) {
+        current_status.internal_status = Waiting;
+        tr_debug("LWM2M client internal status: Waiting");
+    } else if (strstr(current_internal_status, "ACTIVE") != NULL) {
+        current_status.internal_status = Active;
+        tr_debug("LWM2M client internal status: Active");
+    } else if (strstr(current_internal_status, "IDLE") != NULL) {
+        current_status.internal_status = Idle;
+        tr_debug("LWM2M client internal status: Idle");
+    } else if (strstr(current_internal_status, "DEREG") != NULL) {
+        current_status.internal_status = Deregistering;
+        tr_debug("LWM2M client internal status: Deregistering");
+    } else {
+        current_status.internal_status = Unknown;
+        tr_debug("LWM2M client internal status: Unknown");
+    }
+
+    return current_status;
 }
 
 nsapi_error_t OneEdgeService::lwm2m_client_set_battery_level(int battery_level)
@@ -219,17 +263,44 @@ nsapi_error_t OneEdgeService::lwm2m_client_send_ack(int action)
 void OneEdgeService::urc_lwm2m_tlt()
 {
     char current_state[ONEEDGE_CLIENT_STATE_MAX_LENGTH];
+    char url[ONEEDGE_CLIENT_URL_MAX_LENGTH];
+    nsapi_error_t err;
 
     at_handler->lock();
-    const ssize_t current_state_length = at_handler->read_string(current_state, ONEEDGE_CLIENT_STATE_MAX_LENGTH);
-    at_handler->skip_param();
-    at_handler->skip_param();
-    const nsapi_error_t err = at_handler->unlock_return_error();
+    at_handler->read_string(current_state, sizeof(current_state));
 
-    tr_debug("Found LWM2M-TLT URC, new state: %s", current_state);
-
-    if (err != NSAPI_ERROR_OK) {
+    // Check if it's a CLIENT_DISABLED or FORCE_EXIT event because they do not
+    // return the SSID and URL parameters
+    if (strstr(current_state, "CLIENT_DISABLED") != NULL) {
+        err = at_handler->unlock_return_error();
+        if (err == NSAPI_ERROR_OK && _server_registration_callback) {
+            _server_registration_callback(ClientServerRegistrationEvent::ClientDisabledEvent, 0, "");
+        }
         return;
+    } else if (strstr(current_state, "FORCE_EXIT") != NULL) {
+        err = at_handler->unlock_return_error();
+        if (err == NSAPI_ERROR_OK && _server_registration_callback) {
+            _server_registration_callback(ClientServerRegistrationEvent::ForceExitEvent, 0, "");
+        }
+        return;
+    }
+
+    int ssid = at_handler->read_int();
+    at_handler->read_string(url, sizeof(url));
+    err = at_handler->unlock_return_error();
+
+    if (err == NSAPI_ERROR_OK && _server_registration_callback) {
+        if (strstr(current_state, "BOOTSTRAPPING") != NULL) {
+            _server_registration_callback(ClientServerRegistrationEvent::BootstrappingEvent, ssid, url);
+        } else if (strstr(current_state, "BOOTSTRAPPED") != NULL) {
+            _server_registration_callback(ClientServerRegistrationEvent::BootstrappedEvent, ssid, url);
+        } else if (strstr(current_state, "REGISTERING") != NULL) {
+            _server_registration_callback(ClientServerRegistrationEvent::RegisteringEvent, ssid, url);
+        } else if (strstr(current_state, "REGISTERED") != NULL) {
+            _server_registration_callback(ClientServerRegistrationEvent::RegisteredEvent, ssid, url);
+        } else if (strstr(current_state, "SUSPENDED") != NULL) {
+            _server_registration_callback(ClientServerRegistrationEvent::SuspendedEvent, ssid, url);
+        }
     }
 }
 
@@ -238,13 +309,21 @@ void OneEdgeService::urc_lwm2mring()
     char current_ring_state[ONEEDGE_CLIENT_STATE_MAX_LENGTH];
 
     at_handler->lock();
-    const ssize_t current_state_length = at_handler->read_string(current_ring_state, ONEEDGE_CLIENT_STATE_MAX_LENGTH);
+    at_handler->read_string(current_ring_state, ONEEDGE_CLIENT_STATE_MAX_LENGTH);
     const nsapi_error_t err = at_handler->unlock_return_error();
 
-    tr_debug("Found #LWM2MRING URC, new state: %s", current_ring_state);
-
-    if (err != NSAPI_ERROR_OK) {
-        return;
+    if (err == NSAPI_ERROR_OK && _ring_callback) {
+        if (strstr(current_ring_state, "REG") != NULL) {
+            _ring_callback(ClientRingEvent::RegisterEvent);
+        } else if (strstr(current_ring_state, "UPD") != NULL) {
+            _ring_callback(ClientRingEvent::UpdateEvent);
+        } else if (strstr(current_ring_state, "NOT") != NULL) {
+            _ring_callback(ClientRingEvent::NotificationEvent);
+        } else if (strstr(current_ring_state, "SMS") != NULL) {
+            _ring_callback(ClientRingEvent::SMSWakeUpEvent);
+        } else if (strstr(current_ring_state, "DRG") != NULL) {
+            _ring_callback(ClientRingEvent::DeregistrationEvent);
+        }
     }
 }
 
@@ -254,10 +333,8 @@ void OneEdgeService::urc_lwm2mend()
     const int end_result_code = at_handler->read_int();
     const nsapi_error_t err = at_handler->unlock_return_error();
 
-    tr_debug("Found #LWM2MEND URC, end result code: %d", end_result_code);
-
-    if (err != NSAPI_ERROR_OK) {
-        return;
+    if (err == NSAPI_ERROR_OK && _end_callback) {
+        _end_callback(end_result_code);
     }
 }
 
@@ -267,13 +344,15 @@ void OneEdgeService::urc_lwm2minfo()
     char info_event[ONEEDGE_CLIENT_STATE_MAX_LENGTH];
 
     at_handler->lock();
-    const ssize_t info_type_length = at_handler->read_string(info_type, ONEEDGE_CLIENT_STATE_MAX_LENGTH);
-    const ssize_t info_event_length = at_handler->read_string(info_event, ONEEDGE_CLIENT_STATE_MAX_LENGTH);
+    at_handler->read_string(info_type, ONEEDGE_CLIENT_STATE_MAX_LENGTH);
+    at_handler->read_string(info_event, ONEEDGE_CLIENT_STATE_MAX_LENGTH);
     const nsapi_error_t err = at_handler->unlock_return_error();
 
-    tr_debug("Found #LWM2MINFO URC, info type: %s, info event: %s", info_type, info_event);
-
-    if (err != NSAPI_ERROR_OK) {
-        return;
+    if (err == NSAPI_ERROR_OK && _info_callback) {
+        if (strstr(info_event, "FOTA REBOOT") != NULL) {
+            _info_callback(ClientInfoEvent::FotaRebootEvent);
+        } else if (strstr(info_event, "DEVICE REBOOT") != NULL) {
+            _info_callback(ClientInfoEvent::DeviceRebootEvent);
+        }
     }
 }
