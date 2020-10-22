@@ -206,8 +206,10 @@ public:
          * and if the client disables updates
          */
         void deallocate_tx_buffer(void) {
+            mutex.lock();
             delete _txbuf;
             _txbuf = nullptr;
+            mutex.unlock();
         }
 
         void wake(void) {

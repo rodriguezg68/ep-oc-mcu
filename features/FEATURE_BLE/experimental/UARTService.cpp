@@ -21,6 +21,8 @@
  * TODO - throughput test
  */
 
+#define BLE_UART_TRACE 0
+
 #if BLE_FEATURE_GATT_SERVER
 
 #include "UARTService.h"
@@ -84,15 +86,19 @@ void UARTService::start(BLE &ble_interface)
         GattAttribute* desc = rxCharacteristic.getDescriptor(i);
         if(desc->getUUID() == UUID(0x2902)) {
             rxCCCDHandle = desc->getHandle();
+#if BLE_UART_TRACE
             tr_info("uart service cccd handle: %u",
                     rxCCCDHandle);
+#endif
         }
     }
 }
 
 void UARTService::onAttMtuChange(ble::connection_handle_t connectionHandle,
         uint16_t attMtuSize) {
+#if BLE_UART_TRACE
     tr_debug("mtu changed to %u for connection handle %d", attMtuSize, connectionHandle);
+#endif
     mbed::SharedPtr<BleSerial> ser = get_ble_serial_handle(connectionHandle);
     if(ser) {
         ser->set_mtu(attMtuSize);
@@ -147,10 +153,13 @@ void UARTService::onConnectionComplete(
     {
         // Create a new BleSerial handle for this connection
         *slot = new BleSerial(*this, event.getConnectionHandle());
+#if BLE_UART_TRACE
         tr_debug("serial handle (+): connection handle: %d", event.getConnectionHandle());
-
+#endif
     } else {
+#if BLE_UART_TRACE
         tr_warn("no serial slots available");
+#endif
     }
 }
 
@@ -164,8 +173,9 @@ void UARTService::onDisconnectionComplete(
     if(ser) {
         (*ser)->shutdown();
         *ser = nullptr; // Forget the reference and let SharedPtr clean up
-
+#if BLE_UART_TRACE
         tr_debug("serial handle(-): connection handle: %d", event.getConnectionHandle());
+#endif
     }
 }
 
@@ -247,15 +257,17 @@ ssize_t UARTService::BleSerial::write(const void *_buffer, size_t length)
         return -ESHUTDOWN;
     }
 
-    // Ignore if the client hasn't subscribed yet
-    if(_txbuf == nullptr) {
-        return -EAGAIN;
-    }
-
     const uint8_t *buffer = static_cast<const uint8_t*>(_buffer);
     size_t data_written = 0;
 
     mutex.lock();
+
+    // Ignore if the client hasn't subscribed yet
+    if(_txbuf == nullptr) {
+        mutex.unlock();
+        return -EAGAIN;
+    }
+
     while(data_written < length) {
 
         if(_txbuf->full()) {
@@ -269,6 +281,10 @@ ssize_t UARTService::BleSerial::write(const void *_buffer, size_t length)
                 }
                 mutex.unlock();
                 thread_sleep_for(1);
+                // Check if _txbuf was deallocated while waiting
+                if(!_txbuf) {
+                    return -EAGAIN;
+                }
                 mutex.lock();
 
             } while(_txbuf->full());
@@ -295,7 +311,11 @@ ssize_t UARTService::BleSerial::write(const void *_buffer, size_t length)
                 return -ESHUTDOWN;
             }
             mutex.unlock();
+            // Check if _txbuf was deallocated while waiting
             thread_sleep_for(1);
+            if(!_txbuf) {
+                return -EAGAIN;
+            }
             mutex.lock();
         }
 
@@ -358,10 +378,14 @@ void UARTService::BleSerial::on_updates_enabled(void) {
     if(_updates_changed_cb) {
         _updates_changed_cb(true);
     }
+#if BLE_UART_TRACE
     tr_debug("updates enabled on connection handle %u", _connection_handle);
+#endif
 }
 
 void UARTService::BleSerial::on_updates_disabled(void) {
+
+    // TODO - what if the client unsubscribes during a write? We should mutex protect this
 
     /** Deallocate TX buffer */
     deallocate_tx_buffer();
@@ -370,7 +394,9 @@ void UARTService::BleSerial::on_updates_disabled(void) {
     if(_updates_changed_cb) {
         _updates_changed_cb(false);
     }
+#if BLE_UART_TRACE
     tr_debug("updates disabled on connection handle %u", _connection_handle);
+#endif
 }
 
 void UARTService::BleSerial::on_data_sent(void) {
@@ -404,10 +430,14 @@ void UARTService::BleSerial::on_data_sent(void) {
     ble_error_t err = _service.write(this, mbed::make_Span(_gatt_tx_buf, i));
 
     if(err) {
+#if BLE_UART_TRACE
         tr_error("writing to connection %d failed: %u", _connection_handle, err);
+#endif
         // TODO do we need to set _sending_data to false here?
     } else {
+#if BLE_UART_TRACE
         tr_info("wrote %d bytes to connection %d", i, _connection_handle);
+#endif
         _sending_data = true;
         if(was_full && !_txbuf->full()) {
             wake();
