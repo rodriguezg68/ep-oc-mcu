@@ -11,6 +11,11 @@ import json
 
 import time
 
+from threading import Thread, Event, Timer
+import random
+import array
+import inspect
+
 # UART Service UUID
 uart_svc_uuid = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
 # UART TX Characteristic UUID
@@ -24,6 +29,22 @@ cached_tx_handle = None
 cached_rx_cccd_handle = None
 
 address_type_map = {0: "PUBLIC", 1: "RANDOM", 2: "PUBLIC_IDENTITY", 3: "RANDOM_STATIC_IDENTITY", 0xFF: "ANONYMOUS"}
+
+
+def lineno():
+    """Returns the current line number in our program."""
+    return inspect.currentframe().f_back.f_lineno
+
+
+def raise_if_different(expected, actual, line, text=''):
+    """Raise a RuntimeError if actual is different than expected."""
+    if expected != actual:
+        raise RuntimeError('[{}]:{}, {} Got {!r}, expected {!r}'.format(__file__, line, text, actual, expected))
+
+
+def raise_unconditionally(line, text=''):
+    """Raise a RuntimeError unconditionally."""
+    raise RuntimeError('[{}]:{}, {}'.format(__file__, line, text))
 
 
 class UARTSerialAllocator(fixtures.BoardAllocator):
@@ -130,6 +151,25 @@ class BleSerialClient:
             if not r:
                 return False
 
+        # Set the connection parameters to increase test speed
+        # Connection interval min = 7ms, Connection interval max = 30ms
+        # Slave latency = 5, Supervision timeout = 2.5 seconds
+        r = self.ble_dev.gap.updateConnectionParameters(self.connection_info["connection_handle"],
+                                                        6, 24, 5, 250)
+        if not r.success():
+            raise_unconditionally(lineno(), "could not update connection parameters")
+
+        # Wait for connection parameters to complete being updated
+        self.ble_dev.wait_for_output("<<<", timeout=10, assert_timeout=False)
+        event = self.ble_dev.events.get(block=True, timeout=10)
+        d = json.loads(event)
+        info = d['value']
+
+        if 'on_connection_parameters_update_complete' in d['name']:
+            if self.connection_info['connection_handle'] == info['connection_handle']:
+                if "BLE_ERROR_NONE" != info['status']:
+                    raise_unconditionally(lineno(), "failed to update connection parameters")
+
     def subscribe(self):
         # Write the CCCD to 01 to subscribe to notifications
         r = self.ble_dev.gattClient.writeCharacteristicDescriptor(
@@ -179,7 +219,7 @@ class BleSerialClient:
 
     def echo_test(self, data: bytearray):
 
-        data_str = "".join("{:02x}".format(x) for x in data)
+        data_str = "".join("{:02x}".format(x) for x in data).upper()
 
         # Write the byte array to device
         # Format to hex string ([0x01, 0x02, ...] = "0102...")
@@ -190,8 +230,8 @@ class BleSerialClient:
         )
 
         if not r.success():
-            self.logger.prn_err("could not write to tx char")
-            return False
+            raise_unconditionally(lineno(), "could not write to tx char")
+
 
         # Wait for an HVX
         self.ble_dev.wait_for_output("<<<", timeout=10, assert_timeout=False)
@@ -203,13 +243,58 @@ class BleSerialClient:
                 if cached_rx_handle['value_handle'] == d['handle']:
                     # We received data, make sure it matches what we sent
                     self.logger.prn_inf("received data: {}".format(d['data']))
-                    if data_str == d['data']:
-                        return True
+                    raise_if_different(data_str, d['data'].upper(), lineno(),
+                                       'Payloads mismatch on connection {}'.format(
+                                           self.connection_info['connection_handle']))
+                    return
 
-        return False
+        raise_unconditionally(lineno(), "No echo payload received within timeout on connection {}".format(
+            self.connection_info['connection_handle']
+        ))
 
     def reset(self):
-        pass
+        self.ble_dev.ble.reset()
+
+
+def echo_test(ble_ser : BleSerialClient, payload_size):
+    """
+    Send and receive random data using BleSerialClient.
+
+    Verify the data received from the ble_ser matches the data sent to it
+    Raise a RuntimeError if data does not match.
+
+    :param ble_ser: client to use
+    :param payload_size: size of random payload to echo
+    :return: None
+    """
+
+    payload_out = array.array('B', (random.randint(0x00, 0xff) for _ in range(payload_size)))
+    ble_ser.echo_test(payload_out)
+
+
+# Thank you pyusb_basic host test :)
+def random_size_echo_test(ble_ser : BleSerialClient, failure  : Event, error : Event, seconds, log, min_payload_size=1):
+    """
+    Repeat data echo test for given BLESerialClient
+    :param ble_ser: BleSerialClient to use for the test
+    :param failure: Set a failure Event if data verification fails.
+    :param error: Set an error Event if unexpected error occurs.
+    :param seconds: length of echo test
+    :param log: Logger instance
+    :param min_payload_size: Minimum payload size used (maximum is MTU)
+    :return: None
+    """
+
+    end_ts = time.time() + seconds
+    while time.time() < end_ts and not failure.is_set() and not error.is_set():
+        payload_size = random.randint(min_payload_size, ble_ser.mtu)
+        try:
+            echo_test(ble_ser, payload_size)
+        except RuntimeError as err:
+            log(err)
+            failure.set()
+
+        time.sleep(0.01)
 
 
 class BleSerialTest(BaseHostTest):
@@ -226,14 +311,29 @@ class BleSerialTest(BaseHostTest):
         # Connect with a single client and perform the echo test
         client = BleSerialClient(self.allocator.allocate())
 
+        client.reset()
+
         if not client.connect_to(mac, addr_type):
             self.notify_complete(False)
 
         # Subscribe to RX characteristic
         client.subscribe()
 
-        # Run the echo test
-        result = client.echo_test(bytearray([1, 2, 3, 4, 5]))
+        # Run the echo test for a few seconds
+        test_error = Event()
+        test_failure = Event()
+        test_kwargs = {
+            'ble_ser': client,
+            'failure': test_failure,
+            'error': test_error,
+            'secods': 3.0,
+            'log': self.logger
+        }
+
+        random_size_echo_test(client, test_failure, test_error, 10.0, self.logger)
+
+        if test_failure.is_set():
+            raise_unconditionally(lineno(), 'Payload mismatch')
 
         # Unsubscribe from client and reset
         client.unsubscribe()
@@ -242,18 +342,38 @@ class BleSerialTest(BaseHostTest):
         # Release client
         self.allocator.release(client.ble_dev)
 
-        self.notify_complete(result)
+        self.notify_complete(True)
+
+    def _callback_echo_multi_connection_blocking(self, key, value, timestamp):
+        pass
+
+    def _callback_echo_single_connection_nonblocking(self, key, value, timestamp):
+        pass
+
+    def _callback_echo_multi_connection_nonblocking(self, key, value, timestamp):
+        pass
+
+    def _callback_disconnect_while_reading(self, key, value, timestamp):
+        pass
+
+    def _callback_disconnect_while_writing(self, key, value, timestamp):
+        pass
+
+    def _callback_memory_leak(self, key, value, timestamp):
+        pass
 
     def setup(self):
 
         # Set up board allocator
         self.allocator = UARTSerialAllocator(self, ["NRF52_DK"],
                                              {"NRF52_DK": None},
-                                             0, 115200, 0)
+                                             0.001, 115200, 0)
 
         # Register callbacks
         self.register_callback('echo_single_connection_blocking',
                                self._callback_echo_single_connection_blocking)
+        self.register_callback('echo_multi_connection_blocking',
+                               self._callback_echo_multi_connection_blocking)
 
     def result(self):
         pass
