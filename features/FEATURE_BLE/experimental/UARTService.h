@@ -282,10 +282,10 @@ public:
 
     virtual ~UARTService();
 
-    void start(BLE &ble_interface);
+    virtual void start(BLE &ble_interface);
 
     /** GattServer::EventHandler overrides */
-    virtual void onAttMtuChange(
+    void onAttMtuChange(
             ble::connection_handle_t connectionHandle,
             uint16_t attMtuSize) override;
 
