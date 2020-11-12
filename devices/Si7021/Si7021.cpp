@@ -66,7 +66,7 @@ bool Si7021::check()
     if(i2c.write(ADDR, (char*)tx_buff, 2) != 0) return 0;
     if(i2c.read(ADDR, (char*)rx_buff, 8) != 0) return 0;
     
-    if(rx_buff[0] == DEVICE_ID)
+    if(rx_buff[0] == DEVICE_ID_SI)
         return true;
     else return 0;
 }
