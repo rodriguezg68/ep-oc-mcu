@@ -48,7 +48,7 @@
 #define FREQ    100000
 
 /** Device ID value for Si7021 */
-#define DEVICE_ID 0x15
+#define DEVICE_ID_SI 0x15
 
 class Si7021
 {
