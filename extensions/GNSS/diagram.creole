@@ -1,5 +1,5 @@
 @startuml
-enum gnss_error_t << uint32_t >> {
+enum GNSSError {
   GNSS_ERROR_OK
   GNSS_ERROR_NOT_ENABLED
   GNSS_ERROR_NOT_SUPPORTED
@@ -18,12 +18,13 @@ enum GNSSProperty {
   PROPERTY_COURSE_OVER_GROUND
   PROPERTY_SPEED_OVER_GROUND
   PROPERTY_NUMBER_OF_SATELLITES
+  PROPERTY_MAX
 }
 
 class PositionInfo << (S,orchid) >> {
   + time_t UtcTimestamp
-  + float Latitude
-  + float Longitude
+  + nmea_position Latitude
+  + nmea_position Longitude
   + float HorizontalDilutionOfPrecision
   + float Altitude
   + FixType Fix
@@ -32,13 +33,19 @@ class PositionInfo << (S,orchid) >> {
   + uint8_t NumberOfSatellites
 }
 
+class nmea_position << (S,orchid) >> {
+  + double minutes
+  + int degrees
+  + nmea_cardinal_t <<char>> cardinal
+}
+
 class GNSS {
   - const intptr_t *_property_array
   ----
-  + enable() : gnss_error_t
-  + disable() : gnss_error_t
+  + enable() : GNSSError
+  + disable() : GNSSError
   + get_current_position() : PositionInfo
-  + on_new_position_info(mbed::Callback<void(PositionInfo&)> callback_function, std::chrono::duration sampling_rate) : gnss_error_t
+  + on_new_position_info(mbed::Callback<void(PositionInfo&)> callback_function, std::chrono::duration sampling_rate) : GNSSError
   + get_property(GNSSProperty key) : intptr_t
   + set_gnss_properties(const intptr_t *property_array) : void
 }
@@ -49,13 +56,17 @@ note left of GNSS
   must be copied for the data to persist
 end note
 
+note "From the libnmea library" as libnmea_note
+
 class TELIT_ME310_GNSS {
   - *ATHandler at_handler
 }
 
 TELIT_ME310_GNSS --|> GNSS
 GNSS ..> PositionInfo
-GNSS ..> gnss_error_t
+GNSS ..> GNSSError
 GNSS ..> GNSSProperty
 PositionInfo ..> FixType
+PositionInfo ..> nmea_position
+nmea_position .. libnmea_note
 @enduml

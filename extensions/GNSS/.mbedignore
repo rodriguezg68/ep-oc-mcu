@@ -1,0 +1,3 @@
+libnmea/examples/*
+libnmea/tests/*
+libnmea/src/nmea/parser.c
