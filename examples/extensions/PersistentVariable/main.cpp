@@ -49,6 +49,7 @@ public:
 int main(void) {
 
 	ep::PersistentVariable<bool> main_flag(false, "/main/main_flag");
+	ep::PersistentVariable<char*> string_setting("test", "/main/string_setting");
 
 	TestClass my_test;
 
@@ -61,6 +62,7 @@ int main(void) {
 	printf("\tlast_val: %f\r\n", settings.last_val);
 
 	printf("main_flag: %s\r\n", (main_flag? "true" : "false"));
+	printf("string setting: %s\r\n", string_setting.get());
 
 	/** Update all the values */
 	my_test.int_setting = (my_test.int_setting+1);
@@ -71,6 +73,7 @@ int main(void) {
 	my_test.multi_settings = settings;
 
 	main_flag = !(main_flag);
+	string_setting.set("test");
 
 	while(true) {
 
