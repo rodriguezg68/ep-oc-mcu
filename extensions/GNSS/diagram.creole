@@ -1,0 +1,61 @@
+@startuml
+enum gnss_error_t << uint32_t >> {
+  GNSS_ERROR_OK
+  GNSS_ERROR_NOT_ENABLED
+  GNSS_ERROR_NOT_SUPPORTED
+  GNSS_ERROR_UNKNOWN_ERROR
+}
+
+enum FixType {
+  FIX_TYPE_INVALID
+  FIX_TYPE_2D
+  FIX_TYPE_3D
+  FIX_TYPE_UNKNOWN
+}
+
+enum GNSSProperty {
+  PROPERTY_HORIZONTAL_DILUTION_OF_PRECISION
+  PROPERTY_COURSE_OVER_GROUND
+  PROPERTY_SPEED_OVER_GROUND
+  PROPERTY_NUMBER_OF_SATELLITES
+}
+
+class PositionInfo << (S,orchid) >> {
+  + time_t UtcTimestamp
+  + float Latitude
+  + float Longitude
+  + float HorizontalDilutionOfPrecision
+  + float Altitude
+  + FixType Fix
+  + float CourseOverGround
+  + float SpeedOverGround
+  + uint8_t NumberOfSatellites
+}
+
+class GNSS {
+  - const intptr_t *_property_array
+  ----
+  + enable() : gnss_error_t
+  + disable() : gnss_error_t
+  + get_current_position() : PositionInfo
+  + on_new_position_info(mbed::Callback<void(PositionInfo&)> callback_function, std::chrono::duration sampling_rate) : gnss_error_t
+  + get_property(GNSSProperty key) : intptr_t
+  + set_gnss_properties(const intptr_t *property_array) : void
+}
+
+note left of GNSS
+  ""PositionInfo"" reference passed
+  to the callback is temporary and
+  must be copied for the data to persist
+end note
+
+class TELIT_ME310_GNSS {
+  - *ATHandler at_handler
+}
+
+TELIT_ME310_GNSS --|> GNSS
+GNSS ..> PositionInfo
+GNSS ..> gnss_error_t
+GNSS ..> GNSSProperty
+PositionInfo ..> FixType
+@enduml
