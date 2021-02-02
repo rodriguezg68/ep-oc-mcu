@@ -87,7 +87,7 @@ public:
         FixType Fix;                            // Type of fix
         float CourseOverGround;                 // Course over ground
         float SpeedOverGround;                  // Speed over ground (km/hr)
-        uint8_t NumberOfSatellites;              // total number of satellites in use
+        uint8_t NumberOfSatellites;             // Total number of satellites in use
     };
 
     /**
@@ -103,12 +103,19 @@ public:
     /**
      * Enable the GNSS device
      */
-    GNSSError enable();
+    virtual GNSSError enable();
 
     /**
      * Disable the GNSS device
      */
-    GNSSError disable();
+    virtual GNSSError disable();
+
+    /**
+     * Retrieve the current position
+     * 
+     * @return The current position info
+     */
+    virtual PositionInfo get_current_position();
 
 private:
     const intptr_t *_property_array;

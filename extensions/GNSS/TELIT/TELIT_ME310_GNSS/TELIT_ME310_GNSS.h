@@ -29,24 +29,85 @@
 
 #include "GNSS.h"
 #include "ATHandler.h"
+#include "CellularDevice.h"
+#include "mbed_trace.h"
 
 namespace ep
 {
 
+static const int GPSCFG_SET_WWAN_GNSS_PRIORITY  = 0;
+static const int GPSCFG_SET_TBF                 = 1;
+static const int GPSCFG_SET_CONSTELLATION       = 2;
+
 /**
- * Logically abstraction of the Telit ME310 GNSS controller
+ * Logical abstraction of the Telit ME310 GNSS controller
  */
 class TELIT_ME310_GNSS : public GNSS  {
 public:
     /**
-     * Default constructor which
-     * 
-     * @param _at_handler   Pointer to an ATHandler
+     * GNSS priority
      */
-    TELIT_ME310_GNSS(ATHandler *_at_handler);
+    enum GNSSPriority {
+        PRIORITY_GNSS = 0,
+        PRIORITY_WWAN = 1
+    };
+
+    /**
+     * Default constructor
+     */
+    TELIT_ME310_GNSS();
+
+    /**
+     * Initialize the connection with the GNSS controller. This
+     * function should be called before enable/disable.
+     */
+    void init();
+
+    /**
+     * Enable the Telit ME310 GNSS controller
+     * 
+     * @return success
+     */
+    GNSSError enable();
+
+    /**
+     * Disable the Telit ME310 GNSS controller
+     * 
+     * @return success
+     */
+    GNSSError disable();
+
+    /**
+     * Retrieve the current position
+     * 
+     * @return The current position info
+     */
+    PositionInfo get_current_position();
+
+    /**
+     * Set GNSS controller priority (GNSS or WWAN)
+     * 
+     * @param desired_priority  Priority setting desired
+     * @return success
+     */
+    GNSSError set_gnss_priority(GNSSPriority desired_priority);
 
 private:
-    ATHandler *at_handler;    
+    CellularDevice *dev;
+    ATHandler *at_handler;
+
+    /**
+     * Convert year, month, day, hour, min, sec to unix timestamp
+     * 
+     * @param year  Year
+     * @param mon   Month
+     * @param mday  Day of the month
+     * @param hour  Hours
+     * @param min   Minutes
+     * @param sec   Seconds
+     * @return Unix timestamp
+     */
+    time_t as_unix_time(int year, int mon, int mday, int hour, int min, int sec);
 };
 
 }

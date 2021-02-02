@@ -45,3 +45,9 @@ GNSS::GNSSError GNSS::disable()
     return GNSS_ERROR_OK;
 }
 
+GNSS::PositionInfo GNSS::get_current_position()
+{
+    PositionInfo position_info;
+    return position_info;
+}
+
