@@ -1,3 +1,5 @@
 libnmea/examples/*
 libnmea/tests/*
-libnmea/src/nmea/parser.c
+libnmea/src/parsers/*
+libnmea/src/nmea/parser*.*
+libnmea/src/nmea/nmea.c
