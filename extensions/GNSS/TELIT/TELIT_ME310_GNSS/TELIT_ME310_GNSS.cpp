@@ -216,6 +216,58 @@ GNSS::GNSSError TELIT_ME310_GNSS::set_gnss_priority(GNSSPriority desired_priorit
     return GNSS_ERROR_UNKNOWN_ERROR;
 }
 
+GNSS::GNSSError TELIT_ME310_GNSS::set_edrx_parameters(ME310eDRXMode mode, ME310eDRXAcT access_technology, char *req_edrx, char *req_pag_time_window)
+{
+    at_handler->lock();
+
+    at_handler->at_cmd_discard("#CEDRXS", "=", "%d%d%s%s",
+        mode, access_technology, req_edrx, req_pag_time_window);
+    if (at_handler->unlock_return_error() == NSAPI_ERROR_OK) {
+        return GNSS_ERROR_OK;
+    }
+
+    return GNSS_ERROR_UNKNOWN_ERROR;
+}
+
+GNSS::GNSSError TELIT_ME310_GNSS::configure_gnss_data_stream(ME310NMEAStreamMode mode,
+    bool gga, bool gll, bool gsa, bool gsv, bool rmc, bool vtg)
+{
+    at_handler->lock();
+
+    at_handler->at_cmd_discard("$GPSNMUN", "=", "%d%d%d%d%d%d%d", mode, gga, gll, gsa, gsv, rmc, vtg);
+    if (at_handler->unlock_return_error() == NSAPI_ERROR_OK) {
+        return GNSS_ERROR_OK;
+    }
+
+    return GNSS_ERROR_UNKNOWN_ERROR;
+}
+
+GNSS::GNSSError TELIT_ME310_GNSS::configure_gnss_data_stream_extended(bool gngns, bool gngsa, bool glgsv, bool gpgrs,
+    bool gagsv, bool gagsa, bool gavtg, bool gpgga, bool pqgsa, bool pqgsv, bool gnvtg, bool gnrmc, bool gngga)
+{
+    at_handler->lock();
+
+    at_handler->at_cmd_discard("$GPSNMUNEX", "=", "%d%d%d%d%d%d%d%d%d%d%d%d%d",
+        gngns,
+        gngsa,
+        glgsv,
+        gpgrs,
+        gagsv,
+        gagsa,
+        gavtg,
+        gpgga,
+        pqgsa,
+        pqgsv,
+        gnvtg,
+        gnrmc,
+        gngga);
+    if (at_handler->unlock_return_error() == NSAPI_ERROR_OK) {
+        return GNSS_ERROR_OK;
+    }
+
+    return GNSS_ERROR_UNKNOWN_ERROR;
+}
+
 time_t TELIT_ME310_GNSS::as_unix_time(int year, int mon, int mday, int hour, int min, int sec)
 {
     struct tm   t;
