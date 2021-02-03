@@ -96,48 +96,50 @@ GNSS::PositionInfo TELIT_ME310_GNSS::get_current_position()
     }
 
     // Get latitude
-    std::string latitude;
-    int latitude_len = at_handler->read_string((char *)latitude.c_str(), 12);
+    char latitude[LAT_LONG_MAX_LENGTH];
+    int latitude_len = at_handler->read_string(latitude, sizeof(latitude));
     if (latitude_len > 0) {
         // Latitude position
         nmea_position latitude_pos;
 
         // Parse degrees/minutes
-        nmea_position_parse((char *)latitude.c_str(), &latitude_pos);
+        nmea_position_parse(latitude, &latitude_pos);
 
         // Parse cardinal direction
-        std::string lat_cardinal = latitude.substr(latitude_len - 1, 1);
-        latitude_pos.cardinal = nmea_cardinal_direction_parse((char *)lat_cardinal.c_str());
+        char lat_cardinal[2];
+        memcpy(lat_cardinal, &latitude[latitude_len - 1], 1);
+        latitude_pos.cardinal = nmea_cardinal_direction_parse(lat_cardinal);
 
         position_info.Latitude = latitude_pos;
     }
 
     // Get longitude
-    std::string longitude;
-    int longitude_len = at_handler->read_string((char *)longitude.c_str(), 13);
+    char longitude[LAT_LONG_MAX_LENGTH];
+    int longitude_len = at_handler->read_string(longitude, sizeof(longitude));
     if (longitude_len > 0) {
         // Longitude position
         nmea_position longitude_pos;
 
         // Parse degrees/minutes
-        nmea_position_parse((char *)longitude.c_str(), &longitude_pos);
+        nmea_position_parse(longitude, &longitude_pos);
 
         // Parse cardinal direction
-        std::string long_cardinal = longitude.substr(longitude_len - 1, 1);
-        longitude_pos.cardinal = nmea_cardinal_direction_parse((char *)long_cardinal.c_str());
+        char long_cardinal[2];
+        memcpy(long_cardinal, &longitude[longitude_len - 1], 1);
+        longitude_pos.cardinal = nmea_cardinal_direction_parse(long_cardinal);
 
         position_info.Longitude = longitude_pos;
     }
 
     // Get horizontal dilution of precision
-    char hdop[4];
+    char hdop[HDOP_MAX_LENGTH];
     int hdop_len = at_handler->read_string(hdop, sizeof(hdop));
     if (hdop_len > 0) {
         position_info.HorizontalDilutionOfPrecision = atof(hdop);
     }
 
     // Get altitude
-    char altitude[4];
+    char altitude[ALTITUDE_MAX_LENGTH];
     int altitude_len = at_handler->read_string(altitude, sizeof(altitude));
     if (altitude_len > 0) {
         position_info.Altitude = atof(altitude);
@@ -162,14 +164,14 @@ GNSS::PositionInfo TELIT_ME310_GNSS::get_current_position()
     }
 
     // Get course over ground
-    char cog[7];
+    char cog[COG_MAX_LENGTH];
     int cog_len = at_handler->read_string(cog, sizeof(cog));
     if (cog_len > 0) {
         position_info.CourseOverGround = atof(cog);
     }
 
     // Get speed over ground (km/hr)
-    char kmhr[6];
+    char kmhr[SPEED_MAX_LENGTH];
     int kmhr_len = at_handler->read_string(kmhr, sizeof(kmhr));
     if (kmhr_len > 0) {
         position_info.SpeedOverGround = atof(kmhr);
