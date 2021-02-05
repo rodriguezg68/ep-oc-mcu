@@ -31,6 +31,7 @@
 #include "ATHandler.h"
 #include "CellularDevice.h"
 #include "mbed_trace.h"
+#include "TinyGPSplus.h"
 
 namespace ep
 {
@@ -38,11 +39,8 @@ namespace ep
 static const int GPSCFG_SET_WWAN_GNSS_PRIORITY  = 0;
 static const int GPSCFG_SET_TBF                 = 1;
 static const int GPSCFG_SET_CONSTELLATION       = 2;
-static const uint8_t LAT_LONG_MAX_LENGTH        = 13;
-static const uint8_t HDOP_MAX_LENGTH            = 10;
-static const uint8_t ALTITUDE_MAX_LENGTH        = 10;
-static const uint8_t COG_MAX_LENGTH             = 10;
-static const uint8_t SPEED_MAX_LENGTH           = 10;
+static const char *GPGGA_SENTENCE_URC_PREFIX    = "$GPGGA,";
+static const char *GNRMC_SENTENCE_URC_PREFIX    = "$GNRMC,";
 
 /**
  * Logical abstraction of the Telit ME310 GNSS controller
@@ -223,9 +221,15 @@ public:
                                                   bool gnrmc = false,
                                                   bool gngga = false);
 
-private:
-    CellularDevice *dev;
-    ATHandler *at_handler;
+    /**
+     * GPGGA NMEA sentence URC callback
+     */
+    void urc_gpgga();
+
+    /**
+     * GNRMC NMEA sentence URC callback
+     */
+    void urc_gnrmc();
 
     /**
      * Convert year, month, day, hour, min, sec to unix timestamp
@@ -239,6 +243,11 @@ private:
      * @return Unix timestamp
      */
     time_t as_unix_time(int year, int mon, int mday, int hour, int min, int sec);
+
+private:
+    CellularDevice *dev;
+    ATHandler *at_handler;
+    TinyGPSPlus values;
 };
 
 }

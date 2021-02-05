@@ -82,16 +82,23 @@ note left of GNSS
   must be copied for the data to persist
 end note
 
+note left of TELIT_ME310_GNSS
+  ""TinyGPSPlus"" is from the TinyGPS++ library
+end note
+
 note "From the libnmea library" as libnmea_note
 
 class TELIT_ME310_GNSS {
   - *CellularDevice dev
   - *ATHandler at_handler
-  - as_unix_time(int year, int mon, int mday, int hour, int min, int sec) : time_t
+  - TinyGPSPlus values
   + set_gnss_priority(GNSSPriority desired_priority) : GNSSError
   + set_edrx_parameters(ME310eDRXMode mode, ME310eDRXAcT access_technology, char *req_edrx, char *req_pag_time_window) : GNSSError
   + configure_gnss_data_stream(ME310NMEAStreamMode mode, bool gga, bool gll, bool gsa, bool gsv, bool rmc, bool vtg) : GNSSError
-  + configure_gnss_data_stream_extended(bool gngns, bool gngsa, bool glgsv, bool gpgrs, bool gagsv, bool gagsa, bool gavtg, bool gpgga, bool pqgsa, bool pqgsv, bool gnvtg, bool gnrmc, bool gngga) : GNSSError
+  + configure_gnss_data_stream_extended(bool gngns, bool gngsa, bool glgsv, bool gpgrs, bool gagsv, bool gagsa, bool gavtg, bool gpgga, bool pqgsa, bool pqgsv, bool gnvtg, bool gnrmc, bool gngga) : GNSSError 
+  + as_unix_time(int year, int mon, int mday, int hour, int min, int sec) : time_t
+  + urc_gpgga(): void
+  + urc_gnrmc(): void
 }
 
 TELIT_ME310_GNSS --|> GNSS

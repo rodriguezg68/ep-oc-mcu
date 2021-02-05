@@ -26,6 +26,7 @@
 
 #include "TELIT_ME310_GNSS.h"
 #include "libnmea/src/parsers/parse.h"
+#include "TinyGPSplus.h"
 
 #define TRACE_GROUP   "GNSS"
 
@@ -36,6 +37,58 @@ TELIT_ME310_GNSS::TELIT_ME310_GNSS()
 {
     dev = CellularDevice::get_target_default_instance();
     at_handler = dev->get_at_handler();
+
+    // Set up URC callbacks
+    at_handler->set_urc_handler(GPGGA_SENTENCE_URC_PREFIX, mbed::Callback<void()>(this, &TELIT_ME310_GNSS::urc_gpgga));
+    at_handler->set_urc_handler(GNRMC_SENTENCE_URC_PREFIX, mbed::Callback<void()>(this, &TELIT_ME310_GNSS::urc_gnrmc));
+}
+
+void TELIT_ME310_GNSS::urc_gpgga()
+{
+    char sentence[100];
+    strcpy(sentence, GPGGA_SENTENCE_URC_PREFIX);
+
+    at_handler->lock();
+
+    // Temporarily set delimiter to '\n' to grab the whole sentence
+    at_handler->set_delimiter('\n');
+
+    // Offset by the length of the sentence prefix
+    at_handler->read_string(sentence + strlen(GPGGA_SENTENCE_URC_PREFIX), sizeof(sentence) - strlen(GPGGA_SENTENCE_URC_PREFIX));
+
+    // Reset the delimiter
+    at_handler->set_default_delimiter();
+    at_handler->unlock();
+
+    // Loop through the sentence and pass it to the TinyGPSPlus library
+    char *iterator;
+    for (iterator = sentence; *iterator != '\0'; iterator++) {
+        values.encode(*iterator);
+    }
+}
+
+void TELIT_ME310_GNSS::urc_gnrmc()
+{
+    char sentence[100];
+    strcpy(sentence, GNRMC_SENTENCE_URC_PREFIX);
+
+    at_handler->lock();
+
+    // Temporarily set delimiter to '\n' to grab the whole sentence
+    at_handler->set_delimiter('\n');
+
+    // Offset by the length of the sentence prefix
+    at_handler->read_string(sentence + strlen(GNRMC_SENTENCE_URC_PREFIX), sizeof(sentence) - strlen(GNRMC_SENTENCE_URC_PREFIX));
+
+    // Reset the delimiter
+    at_handler->set_default_delimiter();
+    at_handler->unlock();
+
+    // Loop through the sentence and pass it to the TinyGPSPlus library
+    char *iterator;
+    for (iterator = sentence; *iterator != '\0'; iterator++) {
+        values.encode(*iterator);
+    }
 }
 
 void TELIT_ME310_GNSS::init()
@@ -76,130 +129,53 @@ GNSS::PositionInfo TELIT_ME310_GNSS::get_current_position()
 {
     PositionInfo position_info;
 
-    at_handler->lock();
-
-    at_handler->cmd_start("AT$GPSACP");
-    at_handler->cmd_stop();
-    at_handler->resp_start("$GPSACP:");
-    
-    // Get timestamp
-    std::string utc_time_stamp;
-    int utc_time_stamp_len = at_handler->read_string((char *)utc_time_stamp.c_str(), 11);
-    if (utc_time_stamp_len <= 0) {
-        tr_warn("Could not read position");
-
-        // Mark as an invalid fix to show an error
+    // Check if we have a valid fix
+    if (!values.location.isValid()) {
         position_info.Fix = FIX_TYPE_INVALID;
-        at_handler->resp_stop();
-        at_handler->unlock();
         return position_info;
     }
 
-    // Get latitude
-    char latitude[LAT_LONG_MAX_LENGTH];
-    int latitude_len = at_handler->read_string(latitude, sizeof(latitude));
-    if (latitude_len > 0) {
-        // Latitude position
-        nmea_position latitude_pos;
+    // Fix is valid, so fill in the data values
+    // Latitude
+    nmea_position latitude_pos;
+    latitude_pos.degrees = abs(values.location.rawLat().deg);
+    latitude_pos.minutes = (values.location.rawLat().billionths / 1000000000.0) * 60; // Convert to minutes
+    latitude_pos.cardinal = values.location.rawLat().negative ? NMEA_CARDINAL_DIR_SOUTH : NMEA_CARDINAL_DIR_NORTH;
+    position_info.Latitude = latitude_pos;
 
-        // Parse degrees/minutes
-        nmea_position_parse(latitude, &latitude_pos);
+    // Longitude
+    nmea_position longitude_pos;
+    longitude_pos.degrees = abs(values.location.rawLng().deg);
+    longitude_pos.minutes = (values.location.rawLng().billionths / 1000000000.0) * 60; // Convert to minutes
+    longitude_pos.cardinal = values.location.rawLng().negative ? NMEA_CARDINAL_DIR_WEST : NMEA_CARDINAL_DIR_EAST;
+    position_info.Longitude = longitude_pos;
 
-        // Parse cardinal direction
-        char lat_cardinal[2];
-        memcpy(lat_cardinal, &latitude[latitude_len - 1], 1);
-        latitude_pos.cardinal = nmea_cardinal_direction_parse(lat_cardinal);
+    // Horizontal dilution of precision
+    position_info.HorizontalDilutionOfPrecision = values.hdop.value() / 100.0;
 
-        position_info.Latitude = latitude_pos;
-    }
+    // Altitude
+    position_info.Altitude = values.altitude.meters();
 
-    // Get longitude
-    char longitude[LAT_LONG_MAX_LENGTH];
-    int longitude_len = at_handler->read_string(longitude, sizeof(longitude));
-    if (longitude_len > 0) {
-        // Longitude position
-        nmea_position longitude_pos;
+    // Fix type (fix is 3D if altitude value is valid)
+    position_info.Fix = values.altitude.isValid() ? FIX_TYPE_3D : FIX_TYPE_2D;
 
-        // Parse degrees/minutes
-        nmea_position_parse(longitude, &longitude_pos);
+    // Course over ground
+    position_info.CourseOverGround = values.course.deg();
 
-        // Parse cardinal direction
-        char long_cardinal[2];
-        memcpy(long_cardinal, &longitude[longitude_len - 1], 1);
-        longitude_pos.cardinal = nmea_cardinal_direction_parse(long_cardinal);
+    // Speed over ground
+    position_info.SpeedOverGround = values.speed.kmph();
 
-        position_info.Longitude = longitude_pos;
-    }
+    // Number of satellites
+    position_info.NumberOfSatellites = values.satellites.value();
 
-    // Get horizontal dilution of precision
-    char hdop[HDOP_MAX_LENGTH];
-    int hdop_len = at_handler->read_string(hdop, sizeof(hdop));
-    if (hdop_len > 0) {
-        position_info.HorizontalDilutionOfPrecision = atof(hdop);
-    }
-
-    // Get altitude
-    char altitude[ALTITUDE_MAX_LENGTH];
-    int altitude_len = at_handler->read_string(altitude, sizeof(altitude));
-    if (altitude_len > 0) {
-        position_info.Altitude = atof(altitude);
-    }
-
-    // Get fix
-    int fix = at_handler->read_int();
-    switch(fix) {
-        case 0:
-        case 1:
-            position_info.Fix = FIX_TYPE_INVALID;
-            break;
-        case 2:
-            position_info.Fix = FIX_TYPE_2D;
-            break;
-        case 3:
-            position_info.Fix = FIX_TYPE_3D;
-            break;
-        default:
-            position_info.Fix = FIX_TYPE_UNKNOWN;
-            break;
-    }
-
-    // Get course over ground
-    char cog[COG_MAX_LENGTH];
-    int cog_len = at_handler->read_string(cog, sizeof(cog));
-    if (cog_len > 0) {
-        position_info.CourseOverGround = atof(cog);
-    }
-
-    // Get speed over ground (km/hr)
-    char kmhr[SPEED_MAX_LENGTH];
-    int kmhr_len = at_handler->read_string(kmhr, sizeof(kmhr));
-    if (kmhr_len > 0) {
-        position_info.SpeedOverGround = atof(kmhr);
-    }
-
-    // Get speed over ground (knots) -> skip because we don't care about knots
-    at_handler->skip_param();
-
-    // Get date
-    std::string date;
-    int date_len = at_handler->read_string((char *)date.c_str(), 7);
-
-    // Get total number of satellites
-    position_info.NumberOfSatellites = at_handler->read_int();
-
-    // Build timestamp
-    if ((date_len == 6) && (utc_time_stamp_len == 10)) {
-        int year = atoi(date.substr(4, 2).c_str()) + 2000;
-        int month = atoi(date.substr(2, 2).c_str());
-        int mday = atoi(date.substr(0, 2).c_str());
-        int hour = atoi(utc_time_stamp.substr(0, 2).c_str());
-        int minute = atoi(utc_time_stamp.substr(2, 2).c_str());
-        int second = (int)std::lround(atof(utc_time_stamp.substr(4, 2).c_str()));
-        position_info.UtcTimestamp = as_unix_time(year, month, mday, hour, minute, second);
-    }
-
-    at_handler->resp_stop();
-    at_handler->unlock();
+    // Timestamp
+    position_info.UtcTimestamp = as_unix_time(
+                                    values.date.year(),
+                                    values.date.month(),
+                                    values.date.day(),
+                                    values.time.hour(),
+                                    values.time.minute(),
+                                    values.time.second());
 
     return position_info;
 }
