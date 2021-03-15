@@ -28,6 +28,8 @@
 #include "libnmea/src/parsers/parse.h"
 #include "TinyGPSplus.h"
 
+#include <cstdlib>
+
 #define TRACE_GROUP   "GNSS"
 
 using namespace ep;
@@ -41,6 +43,7 @@ TELIT_ME910_GNSS::TELIT_ME910_GNSS()
     // Set up URC callbacks
     at_handler->set_urc_handler(GPGGA_SENTENCE_URC_PREFIX, mbed::Callback<void()>(this, &TELIT_ME910_GNSS::urc_gpgga));
     at_handler->set_urc_handler(GNRMC_SENTENCE_URC_PREFIX, mbed::Callback<void()>(this, &TELIT_ME910_GNSS::urc_gnrmc));
+    at_handler->set_urc_handler(GPGSV_SENTENCE_URC_PREFIX, mbed::Callback<void()>(this, &TELIT_ME910_GNSS::urc_gpgsv));
 
 }
 
@@ -92,6 +95,36 @@ void TELIT_ME910_GNSS::urc_gnrmc()
     }
 }
 
+void TELIT_ME910_GNSS::urc_gpgsv()
+{
+    char sentence[100];
+
+    at_handler->lock();
+
+    // Temporarily set delimiter to '\n' to grab the whole sentence
+    at_handler->set_delimiter('\n');
+
+    // Offset by the length of the sentence prefix
+    at_handler->read_string(sentence, sizeof(sentence));
+
+    // Reset the delimiter
+    at_handler->set_default_delimiter();
+    at_handler->unlock();
+
+    // Get the number of this GPGSV message (we only care about the first one)
+    char* field_start = sentence;
+    char* end_ptr;
+    field_start = strchr(sentence, ',') + 1;
+    if(!(strtol(field_start, &end_ptr, 10) == 1)) {
+        return;
+    }
+
+    // The next field will be the satellites in view
+    field_start = strchr(field_start, ',') + 1;
+    satellites_in_view = strtol(field_start, &end_ptr, 10);
+
+}
+
 void TELIT_ME910_GNSS::init()
 {
     at_handler->set_at_timeout(500, true);
@@ -134,12 +167,6 @@ GNSS::PositionInfo TELIT_ME910_GNSS::get_current_position()
 {
     PositionInfo position_info;
 
-    // Check if we have a valid fix
-    if (!values.location.isValid()) {
-        position_info.Fix = FIX_TYPE_INVALID;
-        return position_info;
-    }
-
     // Fix is valid, so fill in the data values
     // Latitude
     nmea_position latitude_pos;
@@ -176,7 +203,10 @@ GNSS::PositionInfo TELIT_ME910_GNSS::get_current_position()
     position_info.SpeedOverGround = values.speed.kmph();
 
     // Number of satellites
-    if(values.satellites.isValid()) {
+    if(satellites_in_view) {
+        position_info.NumberOfSatellites = (uint8_t) satellites_in_view;
+    }
+    else if(values.satellites.isValid()) {
         position_info.NumberOfSatellites = values.satellites.value();
     } else {
         position_info.NumberOfSatellites = 0;
@@ -245,6 +275,5 @@ time_t TELIT_ME910_GNSS::as_unix_time(int year, int mon, int mday, int hour, int
 
     return mktime(&t);          // returns seconds elapsed since January 1, 1970 (begin of the Epoch)
 }
-
 
 #endif /* TELIT_ME910_GNSS_ENABLED */

@@ -41,6 +41,7 @@ static const int GPSCFG_SET_TBF                 = 1;
 static const int GPSCFG_SET_CONSTELLATION       = 2;
 static const char *GPGGA_SENTENCE_URC_PREFIX    = "$GPGGA,";
 static const char *GNRMC_SENTENCE_URC_PREFIX    = "$GPRMC,";
+static const char *GPGSV_SENTENCE_URC_PREFIX    = "$GPGSV,";
 
 /**
  * Logical abstraction of the Telit ME910 GNSS controller
@@ -199,6 +200,11 @@ protected:
     void urc_gnrmc();
 
     /**
+     * GPGSV NMEA sentence URC callback
+     */
+    void urc_gpgsv();
+
+    /**
      * Convert year, month, day, hour, min, sec to unix timestamp
      *
      * @param year  Year
@@ -215,6 +221,8 @@ private:
     CellularDevice *dev;
     ATHandler *at_handler;
     TinyGPSPlus values;
+
+    long satellites_in_view = 0;
 };
 
 }
