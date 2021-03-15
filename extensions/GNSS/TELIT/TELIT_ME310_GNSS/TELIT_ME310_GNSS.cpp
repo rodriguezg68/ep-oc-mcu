@@ -129,12 +129,6 @@ GNSS::PositionInfo TELIT_ME310_GNSS::get_current_position()
 {
     PositionInfo position_info;
 
-    // Check if we have a valid fix
-    if (!values.location.isValid()) {
-        position_info.Fix = FIX_TYPE_INVALID;
-        return position_info;
-    }
-
     // Fix is valid, so fill in the data values
     // Latitude
     nmea_position latitude_pos;
@@ -157,7 +151,12 @@ GNSS::PositionInfo TELIT_ME310_GNSS::get_current_position()
     position_info.Altitude = values.altitude.meters();
 
     // Fix type (fix is 3D if altitude value is valid)
-    position_info.Fix = values.altitude.isValid() ? FIX_TYPE_3D : FIX_TYPE_2D;
+    if(values.location.isValid()) {
+        position_info.Fix = values.altitude.isValid() ? FIX_TYPE_3D : FIX_TYPE_2D;
+    } else {
+        /* In this case, only some values will be valid (eg: Satellites in View) */
+        position_info.Fix = FIX_TYPE_INVALID;
+    }
 
     // Course over ground
     position_info.CourseOverGround = values.course.deg();
@@ -166,7 +165,11 @@ GNSS::PositionInfo TELIT_ME310_GNSS::get_current_position()
     position_info.SpeedOverGround = values.speed.kmph();
 
     // Number of satellites
-    position_info.NumberOfSatellites = values.satellites.value();
+    if(values.satellites.isValid()) {
+        position_info.NumberOfSatellites = values.satellites.value();
+    } else {
+        position_info.NumberOfSatellites = 0;
+    }
 
     // Timestamp
     position_info.UtcTimestamp = as_unix_time(
