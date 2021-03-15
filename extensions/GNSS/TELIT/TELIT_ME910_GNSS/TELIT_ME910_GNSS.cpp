@@ -232,32 +232,6 @@ GNSS::GNSSError TELIT_ME910_GNSS::configure_gnss_data_stream(ME910NMEAStreamMode
     return GNSS_ERROR_UNKNOWN_ERROR;
 }
 
-GNSS::GNSSError TELIT_ME910_GNSS::configure_gnss_data_stream_extended(bool gngns, bool gngsa, bool glgsv, bool gpgrs,
-    bool gagsv, bool gagsa, bool gavtg, bool gpgga, bool pqgsa, bool pqgsv, bool gnvtg, bool gnrmc, bool gngga)
-{
-    at_handler->lock();
-
-    at_handler->at_cmd_discard("$GPSNMUNEX", "=", "%d%d%d%d%d%d%d%d%d%d%d%d%d",
-        gngns,
-        gngsa,
-        glgsv,
-        gpgrs,
-        gagsv,
-        gagsa,
-        gavtg,
-        gpgga,
-        pqgsa,
-        pqgsv,
-        gnvtg,
-        gnrmc,
-        gngga);
-    if (at_handler->unlock_return_error() == NSAPI_ERROR_OK) {
-        return GNSS_ERROR_OK;
-    }
-
-    return GNSS_ERROR_UNKNOWN_ERROR;
-}
-
 time_t TELIT_ME910_GNSS::as_unix_time(int year, int mon, int mday, int hour, int min, int sec)
 {
     struct tm   t;

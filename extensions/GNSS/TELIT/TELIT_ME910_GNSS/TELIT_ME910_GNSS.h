@@ -186,40 +186,6 @@ public:
         bool rmc = false,
         bool vtg = false);
 
-    /**
-     * Use the ME910's AT$GPSNMUNEX command to configure the extended
-     * features of the GNSS NMEA stream.
-     *
-     * Note: The GPGRS and GNGNS NMEA sentences are not supported
-     *
-     * @param gngns Enable/disable GNGNS NMEA sentence
-     * @param gngsa Enable/disable GNGSA NMEA sentence
-     * @param glgsv Enable/disable GLGSV NMEA sentence
-     * @param gpgrs Enable/disable GPGRS NMEA sentence
-     * @param gagsv Enable/disable GAGSV NMEA sentence
-     * @param gagsa Enable/disable GAGSA NMEA sentence
-     * @param gavtg Enable/disable GAVTG NMEA sentence
-     * @param gpgga Enable/disable GPGGA NMEA sentence
-     * @param pqgsa Enable/disable PQGSA NMEA sentence
-     * @param pqgsv Enable/disable PQGSV NMEA sentence
-     * @param gnvtg Enable/disable GNVTG NMEA sentence
-     * @param gnrmc Enable/disable GNRMC NMEA sentence
-     * @param gngga Enable/disable GNGGA NMEA sentence
-     * @return success
-     */
-    GNSSError configure_gnss_data_stream_extended(bool gngns = false,
-                                                  bool gngsa = false,
-                                                  bool glgsv = false,
-                                                  bool gpgrs = false,
-                                                  bool gagsv = false,
-                                                  bool gagsa = false,
-                                                  bool gavtg = false,
-                                                  bool gpgga = false,
-                                                  bool pqgsa = false,
-                                                  bool pqgsv = false,
-                                                  bool gnvtg = false,
-                                                  bool gnrmc = false,
-                                                  bool gngga = false);
 protected:
 
     /**
