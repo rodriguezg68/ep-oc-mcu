@@ -143,7 +143,7 @@ public:
      * 
      * @return The current position info
      */
-    PositionInfo get_current_position();
+    PositionInfo get_current_position(bool use_urcs = true);
 
     /**
      * Set GNSS controller priority (GNSS or WWAN)
@@ -216,6 +216,12 @@ protected:
      * @return Unix timestamp
      */
     time_t as_unix_time(int year, int mon, int mday, int hour, int min, int sec);
+
+    int nmea_position_parse(char *s, nmea_position *pos);
+
+    nmea_cardinal_t nmea_cardinal_direction_parse(char *s);
+
+    int split_string_by_space(char *string, char **values, int max_values);
 
 private:
     CellularDevice *dev;

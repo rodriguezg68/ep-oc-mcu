@@ -163,65 +163,198 @@ GNSS::GNSSError TELIT_ME910_GNSS::disable()
     return GNSS_ERROR_UNKNOWN_ERROR;
 }
 
-GNSS::PositionInfo TELIT_ME910_GNSS::get_current_position()
+GNSS::PositionInfo TELIT_ME910_GNSS::get_current_position(bool use_urcs)
 {
     PositionInfo position_info;
-
-    // Fix is valid, so fill in the data values
-    // Latitude
     nmea_position latitude_pos;
-    latitude_pos.degrees = abs(values.location.rawLat().deg);
-    latitude_pos.minutes = (values.location.rawLat().billionths / 1000000000.0) * 60; // Convert to minutes
-    latitude_pos.cardinal = values.location.rawLat().negative ? NMEA_CARDINAL_DIR_SOUTH : NMEA_CARDINAL_DIR_NORTH;
-    position_info.Latitude = latitude_pos;
-
-    // Longitude
     nmea_position longitude_pos;
-    longitude_pos.degrees = abs(values.location.rawLng().deg);
-    longitude_pos.minutes = (values.location.rawLng().billionths / 1000000000.0) * 60; // Convert to minutes
-    longitude_pos.cardinal = values.location.rawLng().negative ? NMEA_CARDINAL_DIR_WEST : NMEA_CARDINAL_DIR_EAST;
-    position_info.Longitude = longitude_pos;
 
-    // Horizontal dilution of precision
-    position_info.HorizontalDilutionOfPrecision = values.hdop.value() / 100.0;
+    if (use_urcs) {
+        // Fix is valid, so fill in the data values
+        // Latitude
+        // nmea_position latitude_pos;
+        latitude_pos.degrees = abs(values.location.rawLat().deg);
+        latitude_pos.minutes = (values.location.rawLat().billionths / 1000000000.0) * 60; // Convert to minutes
+        latitude_pos.cardinal = values.location.rawLat().negative ? NMEA_CARDINAL_DIR_SOUTH : NMEA_CARDINAL_DIR_NORTH;
+        position_info.Latitude = latitude_pos;
 
-    // Altitude
-    position_info.Altitude = values.altitude.meters();
+        // Longitude
+        // nmea_position longitude_pos;
+        longitude_pos.degrees = abs(values.location.rawLng().deg);
+        longitude_pos.minutes = (values.location.rawLng().billionths / 1000000000.0) * 60; // Convert to minutes
+        longitude_pos.cardinal = values.location.rawLng().negative ? NMEA_CARDINAL_DIR_WEST : NMEA_CARDINAL_DIR_EAST;
+        position_info.Longitude = longitude_pos;
 
-    // Fix type (fix is 3D if altitude value is valid)
-    if(values.location.isValid()) {
-        position_info.Fix = values.altitude.isValid() ? FIX_TYPE_3D : FIX_TYPE_2D;
+        // Horizontal dilution of precision
+        position_info.HorizontalDilutionOfPrecision = values.hdop.value() / 100.0;
+
+        // Altitude
+        position_info.Altitude = values.altitude.meters();
+
+        // Fix type (fix is 3D if altitude value is valid)
+        if(values.location.isValid()) {
+            position_info.Fix = values.altitude.isValid() ? FIX_TYPE_3D : FIX_TYPE_2D;
+        } else {
+            /* In this case, only some values will be valid (eg: Satellites in View) */
+            position_info.Fix = FIX_TYPE_INVALID;
+        }
+
+        // Course over ground
+        position_info.CourseOverGround = values.course.deg();
+
+        // Speed over ground
+        position_info.SpeedOverGround = values.speed.kmph();
+
+        // Number of satellites
+        if(satellites_in_view) {
+            position_info.NumberOfSatellites = (uint8_t) satellites_in_view;
+        }
+        else if(values.satellites.isValid()) {
+            position_info.NumberOfSatellites = values.satellites.value();
+        } else {
+            position_info.NumberOfSatellites = 0;
+        }
+
+        // Timestamp
+        position_info.UtcTimestamp = as_unix_time(
+                                        values.date.year(),
+                                        values.date.month(),
+                                        values.date.day(),
+                                        values.time.hour(),
+                                        values.time.minute(),
+                                        values.time.second());
+        return position_info;
+    }
+
+    at_handler->lock();
+    at_handler->cmd_start_stop("$GPSACP", "");
+    at_handler->resp_start("$GPSACP:");
+    int read_len = 0;
+    // uint16_t n_vals;
+    // char *values[255];
+    position_info.Fix = FIX_TYPE_UNKNOWN;
+
+    // Get timestamp
+    char utc_timestamp[11];
+    read_len = at_handler->read_string(utc_timestamp, sizeof(utc_timestamp));
+    if (read_len <= 0) {
+        position_info.Fix = FIX_TYPE_INVALID;
+    }
+    
+    // Get latitude
+    char latitude[12];
+    read_len = at_handler->read_string(latitude, sizeof(latitude));
+    if (read_len > 0) {
+        latitude_pos.cardinal = nmea_cardinal_direction_parse(&latitude[read_len - 1]);
+        latitude[read_len - 1] = '\0';
+        nmea_position_parse(latitude, &latitude_pos);
+        position_info.Latitude = latitude_pos;
     } else {
-        /* In this case, only some values will be valid (eg: Satellites in View) */
+        position_info.Fix = FIX_TYPE_INVALID;
+    }
+    
+    // Get longitude
+    char longitude[13];
+    read_len = at_handler->read_string(longitude, sizeof(longitude));
+    if (read_len > 0) {
+        longitude_pos.cardinal = nmea_cardinal_direction_parse(&longitude[read_len - 1]);
+        longitude[read_len - 1] = '\0';
+        nmea_position_parse(longitude, &longitude_pos);
+        position_info.Longitude = longitude_pos;
+    } else {
         position_info.Fix = FIX_TYPE_INVALID;
     }
 
-    // Course over ground
-    position_info.CourseOverGround = values.course.deg();
-
-    // Speed over ground
-    position_info.SpeedOverGround = values.speed.kmph();
-
-    // Number of satellites
-    if(satellites_in_view) {
-        position_info.NumberOfSatellites = (uint8_t) satellites_in_view;
-    }
-    else if(values.satellites.isValid()) {
-        position_info.NumberOfSatellites = values.satellites.value();
+    // Get HDOP
+    char hdop[4];
+    read_len = at_handler->read_string(hdop, sizeof(hdop));
+    if (read_len > 0) {
+        position_info.HorizontalDilutionOfPrecision = TinyGPSPlus::parseDecimal(hdop) / 100.0;
     } else {
-        position_info.NumberOfSatellites = 0;
+        position_info.Fix = FIX_TYPE_INVALID;
     }
 
-    // Timestamp
-    position_info.UtcTimestamp = as_unix_time(
-                                    values.date.year(),
-                                    values.date.month(),
-                                    values.date.day(),
-                                    values.time.hour(),
-                                    values.time.minute(),
-                                    values.time.second());
+    // Get altitude
+    char altitude[4];
+    read_len = at_handler->read_string(altitude, sizeof(altitude));
+    if (read_len > 0) {
+        position_info.Altitude = TinyGPSPlus::parseDecimal(altitude) / 100.0;
+    } else {
+        position_info.Fix = FIX_TYPE_INVALID;
+    }
 
-    return position_info;
+    // Get fix
+    switch (at_handler->read_int()) {
+        default:
+        case 0:
+        case 1:
+            position_info.Fix = FIX_TYPE_INVALID;
+            break;
+        case 2:
+            position_info.Fix = FIX_TYPE_2D;
+            break;
+        case 3:
+            position_info.Fix = FIX_TYPE_3D;
+            break;
+    }
+
+    // Get course over ground
+    char cog[7];
+    read_len = at_handler->read_string(cog, sizeof(cog));
+    if (read_len > 0) {
+        position_info.CourseOverGround = TinyGPSPlus::parseDecimal(cog) / 100.0;
+    } else {
+        position_info.Fix = FIX_TYPE_INVALID;
+    }
+
+    // Get speed over ground (km/hr)
+    char kmhr[6];
+    read_len = at_handler->read_string(kmhr, sizeof(kmhr));
+    if (read_len > 0) {
+        position_info.SpeedOverGround = TinyGPSPlus::parseDecimal(kmhr) / 100.0;
+    } else {
+        position_info.Fix = FIX_TYPE_INVALID;
+    }
+
+    // Skip over speed over ground in knots
+    at_handler->skip_param();
+
+    // Get date
+    char date[7];
+    read_len = at_handler->read_string(date, sizeof(date));
+    if (read_len <= 0) {
+        position_info.Fix = FIX_TYPE_INVALID;
+    }
+
+    // Get number of satellites
+    int num_satellites = at_handler->read_int();
+    position_info.NumberOfSatellites = num_satellites == -1 ? 0 : num_satellites;
+
+    at_handler->resp_stop();
+    at_handler->unlock();
+
+    // Build timestamp
+    if (strlen(date) == 6 && strlen(utc_timestamp) == 10) {
+        std::string date_string = std::string(date);
+        std::string time_string = std::string(utc_timestamp);
+
+        int year = atoi(date_string.substr(4, 2).c_str()) + 2000;
+        int month = atoi(date_string.substr(2, 2).c_str());
+        int mday = atoi(date_string.substr(0, 2).c_str());
+        int hour = atoi(time_string.substr(0, 2).c_str());
+        int minute = atoi(time_string.substr(2, 2).c_str());
+        int second = (int)std::lround(atof(time_string.substr(4, 2).c_str()));
+        position_info.UtcTimestamp = as_unix_time(year,
+                                                  month,
+                                                  mday,
+                                                  hour,
+                                                  minute,
+                                                  second);
+    } else {
+        position_info.UtcTimestamp = 0;
+    }
+
+    return position_info;    
 }
 
 GNSS::GNSSError TELIT_ME910_GNSS::set_gnss_priority(GNSSPriority desired_priority)
@@ -274,6 +407,80 @@ time_t TELIT_ME910_GNSS::as_unix_time(int year, int mon, int mday, int hour, int
     t.tm_isdst = -1;            // Is Daylight saving time on? 1 = yes, 0 = no, -1 = unknown
 
     return mktime(&t);          // returns seconds elapsed since January 1, 1970 (begin of the Epoch)
+}
+
+int TELIT_ME910_GNSS::nmea_position_parse(char *s, nmea_position *pos)
+{
+	char *cursor;
+
+	pos->degrees = 0;
+	pos->minutes = 0;
+
+	if (s == NULL || *s == '\0') {
+		return -1;
+	}
+
+	/* decimal minutes */
+	if (NULL == (cursor = strchr(s, '.'))) {
+		return -1;
+	}
+
+	/* minutes starts 2 digits before dot */
+	cursor -= 2;
+	pos->minutes = atof(cursor);
+	*cursor = '\0';
+
+	/* integer degrees */
+	cursor = s;
+	pos->degrees = atoi(cursor);
+
+	return 0;
+}
+
+nmea_cardinal_t TELIT_ME910_GNSS::nmea_cardinal_direction_parse(char *s)
+{
+	if (NULL == s || '\0'== *s) {
+		return NMEA_CARDINAL_DIR_UNKNOWN;
+	}
+
+	switch (*s) {
+	case NMEA_CARDINAL_DIR_NORTH:
+		return NMEA_CARDINAL_DIR_NORTH;
+	case NMEA_CARDINAL_DIR_EAST:
+		return NMEA_CARDINAL_DIR_EAST;
+	case NMEA_CARDINAL_DIR_SOUTH:
+		return NMEA_CARDINAL_DIR_SOUTH;
+	case NMEA_CARDINAL_DIR_WEST:
+		return NMEA_CARDINAL_DIR_WEST;
+	default:
+		break;
+	}
+
+	return NMEA_CARDINAL_DIR_UNKNOWN;
+}
+
+/**
+ * Splits a string by space.
+ *
+ * string is the string to split, will be manipulated. Needs to be
+ *        null-terminated.
+ * values is a char pointer array that will be filled with pointers to the
+ *        splitted values in the string.
+ * max_values is the maximum number of values to be parsed.
+ *
+ * Returns the number of values found in string.
+ */
+int TELIT_ME910_GNSS::split_string_by_space(char *string, char **values, int max_values)
+{
+	int i = 0;
+
+	values[i++] = string;
+	while (i < max_values && NULL != (string = strchr(string, ' '))) {
+		*string = '\0';
+		values[i++] = ++string;
+	}
+
+	return i;
 }
 
 #endif /* TELIT_ME910_GNSS_ENABLED */
