@@ -153,6 +153,14 @@ public:
             return _blocking;
         }
 
+        short poll(short events) const override {
+            short result = _rxbuf.empty()? 0 : POLLIN;
+            if(_txbuf) {
+                result |= _txbuf->full()? 0 : POLLOUT;
+            }
+            return (result & events);
+        }
+
         void sigio(mbed::Callback<void()> func) override {
             _sigio_cb = func;
         }
