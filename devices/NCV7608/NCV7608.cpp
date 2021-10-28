@@ -102,7 +102,17 @@ uint16_t NCV7608::batch_write(uint16_t new_state) {
     assert_cs();
 
     _cached_state = new_state;
+#if MBED_CONF_NCV7608_USE_8BIT_SPI
+    char tx_temp[] = {
+        (char)((new_state & 0xFF00) >> 8),
+        (char)(new_state & 0x00FF),
+    };
+    char rx_temp[] = {0, 0};
+    _spi.write(tx_temp, 2, rx_temp, 2);
+    _cached_diag = (rx_temp[0] << 8) | rx_temp[1];
+#else
     _cached_diag = _spi.write(_cached_state);
+#endif
 
     deassert_cs();
 
