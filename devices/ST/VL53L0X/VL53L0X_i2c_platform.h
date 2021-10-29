@@ -53,7 +53,7 @@ typedef unsigned char bool_t;
 
 
 // #define	   I2C                0x01
-#define	   SPI                0x00
+// #define	   SPI                0x00
 
 #define    COMMS_BUFFER_SIZE    64  // MUST be the same size as the SV task buffer
 
@@ -83,10 +83,10 @@ int32_t VL53L0X_comms_initialise(uint8_t  comms_type,
  *
  * @return status - status 0 = ok, 1 = error
  *
- */                                      
+ */
 int VL53L0_i2c_init(char *comPortStr, unsigned int baudRate);
 
-                                          
+
 /**
  * @brief  Close platform comms.
  *
@@ -139,7 +139,7 @@ int32_t VL53L0X_write_multi(uint8_t address, uint8_t index, uint8_t  *pdata, int
  * Wrapper for SystemVerilog Read Multi task
  *
  * @code
- * 
+ *
  * Example:
  *
  * uint8_t buffer[COMMS_BUFFER_SIZE];
@@ -166,7 +166,7 @@ int32_t VL53L0X_read_multi(uint8_t address,  uint8_t index, uint8_t  *pdata, int
  * Wrapper for SystemVerilog Write Byte task
  *
  * @code
- * 
+ *
  * Example:
  *
  * uint8_t page_number = MAIN_SELECT_PAGE;
